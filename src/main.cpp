@@ -1,4 +1,4 @@
-// Импортируем необходимые библиотеки:
+// Libraries
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
@@ -9,341 +9,310 @@
 #include <Adafruit_BME280.h>
 #include <Wire.h>
 #include <OneWire.h>
-#include <DallasTemperature.h>
 
-// Задаем сетевые настройки
-const char* ssid = "uname";
-const char* password = "pass";
-IPAddress local_IP(192, 168, 1, 68);  // Задаем статический IP-адрес:
-IPAddress gateway(192, 168, 1, 102);  // Задаем IP-адрес сетевого шлюза:
-IPAddress subnet(255, 255, 255, 0);    // Задаем маску сети:
-IPAddress primaryDNS(8, 8, 8, 8);      // Основной ДНС (опционально)
-IPAddress secondaryDNS(8, 8, 4, 4);    // Резервный ДНС (опционально)
-AsyncWebServer server(80);
-AsyncWebSocket ws("/ws");
-
-void notFound(AsyncWebServerRequest *request) {
-  request->send(404, "text/plain", "Not found");
-}
-
-// DTH22 - Датчик температуры и влажности
-#define DHTPIN 13                       //Указываем номер цифрового pin для чтения данных
-#define DHTTYPE DHT22                   //Указываем тип датчика
+//Sensor DTH22
+#define DHTPIN 13                      
+#define DHTTYPE DHT22       
 DHT dht(DHTPIN, DHTTYPE);
 
+//Sensor BH1750
+BH1750 lightMeter;
+
+//Sensor BME280
+Adafruit_BME280 bme;             
+
+//Sensor DS18B20
+OneWire ds(15);                   
+
+//Sensor Soil_Moisture_Sensor
+int moisture_pin = 36;
+int output_value ;
+
+// Network settings
+const char* ssid     = "uname";
+const char* password = "pass";
+IPAddress local_IP(192, 168, 1, 68);
+IPAddress gateway(192, 168, 1, 1);
+IPAddress subnet(255, 255, 255, 0);
+IPAddress primaryDNS(8, 8, 8, 8);
+IPAddress secondaryDNS(8, 8, 4, 4); 
+AsyncWebServer server(80);
+
+// Default Threshold Temperature Value
+String inputMessage = "25.0"; 
+String lastTemperature;
+String enableArmChecked = "checked";
+String inputMessage2 = "true";
+//---------------------
+// Stores LED state
+String ledState1;
+String ledState2;
+String ledState3;
+String ledState4;
+String ledState5;
+
+// DTH22
 String getDHTTemperature() {
-  float IN1 = dht.readTemperature();                    // Считывание температуры и создание переменной с именем IN1
-  if (isnan(IN1)) {                                    // Проверяем, не удалось ли выполнить какое-либо чтение, после чего выходим раньше (чтобы повторить попытку).
-    Serial.println("Ошибка чтения с датчика DTH22!");
+ float IN1 = dht.readTemperature();             
+  if (isnan(IN1)) {                                         
+    Serial.println("Sensor read error DTH22!");
     return "--";
   }
   else {
-    Serial.print("DTH22- Температура: ");
-    Serial.print(IN1);                                 // Вывод температуры в последовательный монитор
-    Serial.print(" °C ");                              // Вывод текста в монитор порта
+	 Serial.print("DTH22- temperature: "); 
+    Serial.print(IN1);                                     
+    Serial.print(" °C ");                                 
     return String(IN1);
   }
 }
 
 String getDHTHumidity() {
-  float IN2 = dht.readHumidity();                      // Считывание влажности и создание переменной с именем IN2
-  if (isnan(IN2)) {                                    // Проверяем, не удалось ли выполнить какое-либо чтение, после чего выходим раньше (чтобы повторить попытку).
-    Serial.println("Ошибка чтения с датчика DTH22!");
+  float IN2 = dht.readHumidity();                          
+  if (isnan(IN2)) {                                       
+    Serial.println("Sensor read erro DTH22!");
     return "--";
   }
   else {
-    Serial.print("DTH22- Влажность: ");
-    Serial.print(IN2);
-    Serial.println(" % ");
+   Serial.print("DTH22- Humidity: ");
+   Serial.print(IN2);
+   Serial.println(" % ");
     return String(IN2);
   }
 }
 
-// BH1750 - Датчик света
-BH1750 lightMeter;
+// BH1750
 String getLightLevel() {
-  float IN3 = lightMeter.readLightLevel();            // Считывание данных и создание переменной с именем IN3
-  Serial.print("Освещенность: ");                     // Вывод текста в монитор порта
-  Serial.print(IN3);                                  // Вывод показаний в последовательный монитор порта
-  Serial.println(" люкс");
-  return String(IN3);
-}
+   float IN3 = lightMeter.readLightLevel();                
+   Serial.print("Illumination level: ");                         
+   Serial.print(IN3);                                     
+   Serial.println(" lux");
+   return String(IN3);
+}  
 
-// BME280 - Универсальный датчик
-Adafruit_BME280 bme;                   // Подключаем датчик в режиме I2C
-
+// BME280
 String getTemperature2() {
-  float IN4 = bme.readTemperature() - 1.04;
-  Serial.print("BME280- Температура: ");
+  float IN4 = bme.readTemperature()-1.04;
+  Serial.print("BME280- temperature: ");
   Serial.print(IN4);
-  Serial.print(F(" °C "));
+  Serial.print(F(" °C ")); 
   return String(IN4);
 }
 
 String getPressure() {
-  float IN5 = bme.readPressure() / 133.3;
-  Serial.print(" Давление: ");
+  float IN5 = bme.readPressure()/133.3;
+  Serial.print(" pressure: ");
   Serial.print(IN5);
   Serial.print(" мм.рт.ст ");
   return String(IN5);
 }
-
+  
 String getHumidity() {
   float IN6 = bme.readHumidity();
-  Serial.print(" Влажность: ");
+  Serial.print(" Humidity: ");
   Serial.print(IN6);
   Serial.println(" %");
   return String(IN6);
 }
 
-// DS18B20 - Датчик температуры почвы
-OneWire ds(15);                        // Указываем номер пина.
-
+// DS18B20
 String gettemperature3() {
-  byte data[2];     // Место для значения температуры
-  ds.reset();       // Начинаем взаимодействие со сброса всех предыдущих команд и параметров
-  ds.write(0xCC);   // Даем датчику DS18b20 команду пропустить поиск по адресу. В нашем случае только одно устрйоство
-  ds.write(0x44);   // Даем датчику DS18b20 команду измерить температуру. Само значение температуры мы еще не получаем - датчик его положит во внутреннюю память
-  delay(1000);      // Микросхема измеряет температуру, а мы ждем.
-  ds.reset();       // Теперь готовимся получить значение измеренной температуры
-  ds.write(0xCC);
-  ds.write(0xBE);   // Просим передать нам значение регистров со значением температуры
+byte data[2];    
+ds.reset();       
+ds.write(0xCC); 
+ds.write(0x44);
+delay(1000);      
+ds.reset();      
+ds.write(0xCC); 
+ds.write(0xBE);   
 
-  // Получаем и считываем ответ
-  data[0] = ds.read();   // Читаем младший байт значения температуры
-  data[1] = ds.read();   // А теперь старший
+data[0] = ds.read(); 
+data[1] = ds.read();  
 
-  // Формируем итоговое значение:
-  // - сперва "склеиваем" значение,
-  // - затем умножаем его на коэффициент, соответсвующий разрешающей способности (для 12 бит по умолчанию - это 0,0625)
-  float temperature =  ((data[1] << 8) | data[0]) * 0.0625;
-
-  float IN7 = ((temperature) + 2.3);                      // Считывание данных и создание переменной с именем IN7, поправочный коэффициент +2,3 гр.
-  Serial.print("DS18B20- Температура почвы: ");           // Вывод текста в монитор порта
-  Serial.print(IN7);                                      // Вывод показаний в последовательный монитор порта
-  Serial.println(" °C");                                  // Вывод текста в монитор порта
-  return String(IN7);
+float temperature =  ((data[1] << 8) | data[0]) * 0.0625;
+  
+float IN7 = ((temperature)+2.3);                        
+Serial.print("DS18B20- Soil temperature: ");           
+Serial.print(IN7);                                      
+Serial.println(" °C");                                
+return String(IN7);
 }
 
-//Датчик Soil Moisture Sensor (Датчик влажности почвы)
-int moisture_pin = 36;                 // Указываем номер аналогового пина
-int output_value ;
-
+//Soil Moisture Sensor
 String getoutput_value() {
-  output_value = analogRead(moisture_pin);
-  output_value = map(output_value, 4090, 2900, 0, 100);  // Настроить, где: 4090=0% влажности, 2900=100% влажности.
-  float IN8 = (output_value);                            // Считывание данных и создание переменной с именем IN8
-  Serial.print("Влажность почвы: ");
-  Serial.print(IN8);                                     // Вывод показаний в последовательный монитор порта
-  Serial.println("%");
-  Serial.println();
-  //if (IN8>=50) digitalWrite(33, HIGH);                  // При понижении влажности до 50% и менее, подать 1 на 33 пин.
-  //else digitalWrite(33, LOW);                           // Сброс реле в исходное состояние
-  return String(IN8);
+output_value = analogRead(moisture_pin);
+output_value = map(output_value, 4090, 2900, 0, 100);
+float IN8 = (output_value);                            
+Serial.print("Soil moisture content: ");
+Serial.print(IN8);                                     
+Serial.println("%");
+Serial.println();
+//if (IN8>=50) digitalWrite(33, HIGH);                  
+//else digitalWrite(33, LOW);                           
+return String(IN8);
 }
+//-----------------------
 
-bool ledState1 = 0;
-bool ledState2 = 0;
-bool ledState3 = 0;
-bool ledState4 = 0;
-bool ledState5 = 0;
-
-// Уведомляем клиентов о текущем состоянии светодиода
-void notifyClients1() {
-  ws.textAll(String(ledState1));
-}
-void notifyClients2() {
-  ws.textAll(String(ledState2 + 2));
-}
-void notifyClients3() {
-  ws.textAll(String(ledState3 + 4));
-}
-void notifyClients4() {
-  ws.textAll(String(ledState4 + 6));
-}
-void notifyClients5() {
-  ws.textAll(String(ledState5 + 8));
-}
-
-/* функция обратного вызова, которая запускается всякий раз, когда мы получаем новые
-  данные от клиентов по протоколу WebSocket. Если мы получаем сообщение “toggle”, мы
-  переключаем значение переменной ledState. Кроме того, мы уведомляем всех клиентов,
-  вызывая функцию notifyClients (). Таким образом, все клиенты получают уведомление об
-  изменении и соответствующим образом обновляют интерфейс.*/
-
-void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
-  AwsFrameInfo *info = (AwsFrameInfo*)arg;
-  if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
-    data[len] = 0;
-    if (strcmp((char*)data, "toggle1") == 0) {
-      ledState1 = !ledState1;
-      notifyClients1();
-    }
-    if (strcmp((char*)data, "toggle2") == 0) {
-      ledState2 = !ledState2;
-      notifyClients2();
-    }
-    if (strcmp((char*)data, "toggle3") == 0) {
-      ledState3 = !ledState3;
-      notifyClients3();
-    }
-    if (strcmp((char*)data, "toggle4") == 0) {
-      ledState4 = !ledState4;
-      notifyClients4();
-    }
-    if (strcmp((char*)data, "toggle5") == 0) {
-      ledState5 = !ledState5;
-      notifyClients5();
-    }
-  }
-}
-
-// Настройка прослушивателя событий для обработки различных асинхронных шагов протокола WebSocket
-void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type,
-             void *arg, uint8_t *data, size_t len) {
-  switch (type) {
-    case WS_EVT_CONNECT:                  // когда клиент вошел в систему
-      Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
-      break;
-    case WS_EVT_DISCONNECT:               // когда клиент вышел из системы
-      Serial.printf("WebSocket client #%u disconnected\n", client->id());
-      break;
-    case WS_EVT_DATA:                     // при получении пакета данных от клиента
-      handleWebSocketMessage(arg, data, len);
-      break;
-    case WS_EVT_PONG:                     // в ответ на запрос ping
-    case WS_EVT_ERROR:                    // при получении ошибки от клиента
-      break;
-  }
-}
-
-// Инициализация WebSocket
-void initWebSocket() {
-  ws.onEvent(onEvent);
-  server.addHandler(&ws);
-}
-
-String processor(const String& var) {
+String processor(const String& var){
   Serial.println(var);
-  if (var == "STATE1") {
-    if (ledState1) {
-      return "ON";
-    } else {
-      return "OFF";
+ 
+  if(var == "STATE1"){
+    if(digitalRead(32)){
+      ledState1 = "To open";
     }
-  }
-  if (var == "STATE2") {
-    if (ledState2) {
-      return "ON";
-    } else {
-      return "OFF";
+    else{
+      ledState1 = "To close";
     }
+    Serial.println(ledState1);
+    return ledState1;
   }
-  if (var == "STATE3") {
-    if (ledState3) {
-      return "ON";
-    } else {
-      return "OFF";
+  
+    if(var == "STATE2"){
+    if(digitalRead(33)){
+      ledState2 = "To open";
     }
-  }
-  if (var == "STATE4") {
-    if (ledState4) {
-      return "ON";
-    } else {
-      return "OFF";
+    else{
+      ledState2 = "To close";
     }
+    Serial.println(ledState2);
+    return ledState2;
   }
-  if (var == "STATE5") {
-    if (ledState5) {
-      return "ON";
-    } else {
-      return "OFF";
+  
+  if(var == "STATE3"){
+    if(digitalRead(25)){
+      ledState3 = "To open";
     }
+    else{
+      ledState3 = "To close";
+    }
+    Serial.println(ledState3);
+    return ledState3;
   }
+  
+  if(var == "STATE4"){
+    if(digitalRead(26)){
+      ledState4 = "To open";
+    }
+    else{
+      ledState4 = "To open";
+    }
+    Serial.println(ledState4);
+    return ledState4;
+  }
+  
+  if(var == "STATE5"){
+    if(digitalRead(27)){
+      ledState5 = "To open";
+    }
+    else{
+      ledState5 = "To close";
+    }
+    Serial.println(ledState5);
+    return ledState5;
+  }
+  
+ // =================== 
+  else if(var == "DATA1"){
+    return getDHTTemperature();
+  }
+  else if(var == "DATA2"){
+    return getDHTHumidity();
+  }
+  else if(var == "DATA3"){
+    return getLightLevel();
+  }
+
+  else if (var == "DATA4"){
+    return getTemperature2();
+  }
+    else if (var == "DATA5"){
+    return getPressure();
+  } 
+  else if (var == "DATA6"){
+    return getHumidity();
+  }
+    else if (var == "DATA7"){
+    return gettemperature3();
+  }
+      else if (var == "DATA8"){
+    return getoutput_value();
+  } 
 }
-
-void setup() {
-  // Serial port for debugging purposes
-  Serial.begin(115200);
-
-  pinMode(32, OUTPUT); digitalWrite(32, LOW);
-  pinMode(33, OUTPUT); digitalWrite(33, LOW);
-  pinMode(25, OUTPUT); digitalWrite(25, LOW);
-  pinMode(26, OUTPUT); digitalWrite(26, LOW);
-  pinMode(27, OUTPUT); digitalWrite(27, LOW);
-
+ 
+void setup(){
+  Serial.begin(115200);   
+  
+pinMode(32, OUTPUT);      
+digitalWrite(32, LOW);
+pinMode(33, OUTPUT);
+digitalWrite(33, LOW); 
+pinMode(25, OUTPUT);
+digitalWrite(25, LOW);
+pinMode(26, OUTPUT);
+digitalWrite(26, LOW);
+pinMode(27, OUTPUT);
+digitalWrite(27, LOW);
+//pinMode(14, OUTPUT); 
+//digitalWrite(14, LOW);
+  
   //DTH22
-  Serial.println(F("запуск датчика DHT22..."));
-  dht.begin();
+Serial.println(F("Running sensor DHT22..."));
+dht.begin();
 
-  // Датчик BH1750
-  Wire.begin();
-  lightMeter.begin();
-  Serial.println(F("запуск датчика BH1750..."));
+// Sensor BH1750
+Wire.begin();
+lightMeter.begin();
+Serial.println(F("Running sensor BH1750..."));
 
-  // Инициализация датчика BME280
+  // Initializing the sensor BME280
   if (!bme.begin(0x76)) {
-    Serial.println("Не обнаружен датчик BME280, проверьте соеденение!");
+	Serial.println("The BME280 sensor is not detected, check the connection!");
     while (1);
-  }
+ }
 
-  //Датчик Soil_Moisture_Sensor
-  Serial.println("запуск датчика влажности почвы... ");
+//Sensor Soil_Moisture_Sensor
+Serial.println("Running Soil Moisture Sensor... ");
 
-  // Настраиваем статический IP-адрес:
-  if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
-    Serial.println("Режим клиента не удалось настроить");
-  }
-
-  // Инициализируем SPIFFS:
+// Static IP:
+if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
+Serial.println("Client mode could not be configured");
+}	 
+  
+    // SPIFFS:
   if (!SPIFFS.begin()) {
-    Serial.println("При монтировании SPIFFS произошла ошибка");
+    Serial.println("An error occurred while installing the SPIFFS");
     return;
   }
+ 
+  // Connecting to WiFi:
+WiFi.begin(ssid, password);
+while (WiFi.status() != WL_CONNECTED) {
+delay(1000);
+Serial.println("Connecting to WiFi...");
+}
+ 
+  // Show my ip.
+Serial.println("");
+Serial.println(" WiFi connected!");
+Serial.println("IP address: ");
+Serial.println(WiFi.localIP());
 
-  // Подключаемся к WiFi:
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Подключаемся к WiFi...");
-  }
+//=============== Sending page to browser ==================
 
-  // Отображаем локальный IP-адрес.
-  Serial.println("");
-  Serial.println("К сети WiFi подключился!");
-  Serial.println("IP адрес: ");
-  Serial.println(WiFi.localIP());
-
-  initWebSocket();
-
-  //=============== Отправляем в браузер вэб страницу ==================
-
-  // Маршрут до корневого каталога
-  // server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-  //  request->send(SPIFFS, "/index.html", String(), false, processor);
-  // });
-
-  // Route for root / web page
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
- //+   request->send(SPIFFS, "/index.html", "text/html");
-	request->send(SPIFFS, "/index.html", String(), false, processor);
+  // root 
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/index.html", String(), false, processor);
   });
-
-  // Маршрут для загрузки файла style.css
-  server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest * request) {
+  
+  // style.css
+  server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send(SPIFFS, "/style.css", "text/css");
   });
-
-  server.on("/script.js", HTTP_GET, [](AsyncWebServerRequest * request) {
-    request->send(SPIFFS, "/script.js", "text/javascript");
-  });
-
-  // Теперь отправим в браузер все наши картинки
-  server.on("/teplica.png", HTTP_GET, [](AsyncWebServerRequest * request) {
+  
+  // pictures
+  server.on("/teplica.png", HTTP_GET, [](AsyncWebServerRequest * request){
     request->send(SPIFFS, "/teplica.png", "image/png");
   });
-
+  
   server.on("/sungif.gif", HTTP_GET, [](AsyncWebServerRequest * request) {
     request->send(SPIFFS, "/sungif.gif", "image/gif");
   });
@@ -372,67 +341,97 @@ void setup() {
     request->send(SPIFFS, "/temp.png", "image/png");
   });
   
-  // ================ Передача управления кнопками ==================
-
-  // Маршрут 
-//  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-//    bool ledState1 = 0;    
-//    request->send(SPIFFS, "/index.html", String(), false, processor);
-//  });
-
-  //============= Отправляем в браузер показания датчиков =============
-
-  server.on("/IN1", HTTP_GET, [](AsyncWebServerRequest * request) {
+  //=========== Sending the sensors readings to the browser =============
+  
+  server.on("/IN1", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", getDHTTemperature().c_str());
   });
-
-  server.on("/IN2", HTTP_GET, [](AsyncWebServerRequest * request) {
+  
+  server.on("/IN2", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", getDHTHumidity().c_str());
   });
-
-  server.on("/IN3", HTTP_GET, [](AsyncWebServerRequest * request) {
+  
+    server.on("/IN3", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", getLightLevel().c_str());
   });
-
-  server.on("/IN4", HTTP_GET, [](AsyncWebServerRequest * request) {
+  
+    server.on("/IN4", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", getTemperature2().c_str());
   });
-
-  server.on("/IN5", HTTP_GET, [](AsyncWebServerRequest * request) {
+  
+  server.on("/IN5", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", getPressure().c_str());
   });
-
-  server.on("/IN6", HTTP_GET, [](AsyncWebServerRequest * request) {
+  
+    server.on("/IN6", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", getHumidity().c_str());
   });
-
-  server.on("/IN7", HTTP_GET, [](AsyncWebServerRequest * request) {
+  
+     server.on("/IN7", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", gettemperature3().c_str());
   });
-
-  server.on("/IN8", HTTP_GET, [](AsyncWebServerRequest * request) {
+  
+       server.on("/IN8", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", getoutput_value().c_str());
   });
+  
+// ================ Transferring button control ==================
 
-  // Start server
+  server.on("/on1", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(32, HIGH);    
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+  
+  server.on("/off1", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(32, LOW);    
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+  
+  server.on("/on2", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(33, HIGH);    
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+  
+  server.on("/off2", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(33, LOW);    
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+  
+  server.on("/on3", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(25, HIGH);    
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+  
+  server.on("/off3", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(25, LOW);    
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+  
+  server.on("/on4", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(26, HIGH);    
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+  
+  server.on("/off4", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(26, LOW);    
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+  
+  server.on("/on5", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(27, HIGH);    
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+  
+  server.on("/off5", HTTP_GET, [](AsyncWebServerRequest *request){
+    digitalWrite(27, LOW);    
+    request->send(SPIFFS, "/index.html", String(), false, processor);
+  });
+
+  // Start web server
   server.begin();
+  Serial.println("Web server started!");
 }
-
-void loop() {
-  ws.cleanupClients();
-  digitalWrite(32, ledState1);
-  digitalWrite(33, ledState2);
-  digitalWrite(25, ledState3);
-  digitalWrite(26, ledState4);
-  digitalWrite(27, ledState5);
+ 
+void loop(){
+  
 }
-
-//if (IN3>=500) digitalWrite(32, HIGH);  // При достижении освещенности 2000 люкс и выше, подать 1 на 32 пин.
-//else digitalWrite(32, LOW); 
-// По заданной температуре открываем (закрываем) форточки.
-//if (IN4>=24) digitalWrite(25, HIGH);   // При достижении температуры 24 гр. и выше, подать 1 на 25 пин. 
-//if (IN4<=20) digitalWrite(25, LOW);    // При понижении температуры до 20 гр. и ниже, подать 0 на 25 пин.
-//if (IN4>=26) digitalWrite(26, HIGH);   // При достижении температуры 26 гр. и выше, подать 1 на 26 пин.
-//else digitalWrite(26, LOW);            // Сброс в исходное состояние
-//if (IN8>=50) digitalWrite(33, HIGH);   // При понижении влажности до 50% и менее, подать 1 на 33 пин.
-//else digitalWrite(33, LOW);            // Сброс реле в исходное состояние
