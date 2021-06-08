@@ -23,8 +23,15 @@ IPAddress secondaryDNS(8, 8, 4, 4);    // Резервный ДНС (опцио�
 AsyncWebServer server(80);             // Создаем сервер через 80 порт
 AsyncWebSocket ws("/ws");              // Создаем объект WebSocket
 
+// ---------- Default Threshold Temperature Value ------------>
+String inputMessage = "25.0";          // пороговое значение температуры
+String lastTemperature;                // Переменная lastTemperature будет содержать последние показания температуры, которые будут сравниваться с пороговым значением.
+String enableArmChecked = "checked";   // Переменная enableArmChecked сообщит нам, установлен ли флажок для автоматического управления выводом или нет.
+String inputMessage2 = "true";         // В случае, если он установлен, значение, сохраненное на inputMessage2, должно быть установлено в true.
+// <-----------------------------------------------------------
+
 void notFound(AsyncWebServerRequest *request) {
-  request->send(404, "text/plain", "Not found");
+  request->send(404, "text/plain;charset=utf-8", "Страница не найдена");
 }
 
 // DTH22 - Датчик температуры и влажности
@@ -149,6 +156,41 @@ bool ledState3 = 0;
 bool ledState4 = 0;
 bool ledState5 = 0;
 
+String processor(const String& var) {
+  Serial.println(var);
+ // if (var == "STATE1") {if (ledState1) {return "ON";} else {return "OFF";}}
+  if (var == "STATE2") {if (ledState2) {return "ON";} else {return "OFF";}}
+  if (var == "STATE3") {if (ledState3) {return "ON";} else {return "OFF";}}
+  if (var == "STATE4") {if (ledState4) {return "ON";} else {return "OFF";}}
+  if (var == "STATE5") {if (ledState5) {return "ON";} else {return "OFF";}}
+
+//----------------------->
+//Заменяет placeholder значениями BME280
+// String processor(const String& var) {
+ // Serial.println(var);
+  if(var == "DATA4"){
+    return lastTemperature;
+  }
+  else if(var == "THRESHOLD"){
+    return inputMessage;
+  }
+  else if(var == "ENABLE_ARM_INPUT"){
+    return enableArmChecked;
+  }
+  return String();
+}
+
+// Переменная флага для отслеживания того, были ли активированы триггеры или нет
+bool triggerActive = false;
+// Следующие переменные будут использоваться для проверки того, получили ли мы HTTP-запрос GET из этих полей ввода, и сохранения значений в переменные соответственно.
+const char* PARAM_INPUT_1 = "threshold_input";
+const char* PARAM_INPUT_2 = "enable_arm_input";
+
+// Интервал между показаниями датчиков. Узнайте больше о таймерах ESP 32: https://RandomNerdTutorials.com/esp32-pir-motion-sensor-interrupts-timers/
+unsigned long previousMillis = 0;     
+const long interval = 5000;
+// <---------------------
+
 // Уведомляем клиентов о текущем состоянии светодиода
 void notifyClients1() {ws.textAll(String(ledState1));}
 void notifyClients2() {ws.textAll(String(ledState2 + 2));}
@@ -193,14 +235,14 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
   }
 }
 
-String processor(const String& var) {
-  Serial.println(var);
-  if (var == "STATE1") {if (ledState1) {return "ON";} else {return "OFF";}}
-  if (var == "STATE2") {if (ledState2) {return "ON";} else {return "OFF";}}
-  if (var == "STATE3") {if (ledState3) {return "ON";} else {return "OFF";}}
-  if (var == "STATE4") {if (ledState4) {return "ON";} else {return "OFF";}}
-  if (var == "STATE5") {if (ledState5) {return "ON";} else {return "OFF";}}
-}
+// String processor(const String& var) {
+//  Serial.println(var);
+//  if (var == "STATE1") {if (ledState1) {return "ON";} else {return "OFF";}}
+ // if (var == "STATE2") {if (ledState2) {return "ON";} else {return "OFF";}}
+ // if (var == "STATE3") {if (ledState3) {return "ON";} else {return "OFF";}}
+//  if (var == "STATE4") {if (ledState4) {return "ON";} else {return "OFF";}}
+//  if (var == "STATE5") {if (ledState5) {return "ON";} else {return "OFF";}}
+// }
 
 // Инициализация WebSocket
 void initWebSocket() {
@@ -229,7 +271,7 @@ void setup() {
 
   // Инициализация датчика BME280
   if (!bme.begin(0x76)) {
-    Serial.println("Не обнаружен датчик BME280, проверьте соеденение!");
+    Serial.println("Не обнаружен датчик BME280, проверьте соединение!");
     while (1);
   }
 
@@ -260,9 +302,10 @@ Serial.println("Connecting to WiFi...");
 
   //=============== Отправляем в браузер вэб страницу ==================
 
-  // Начальная страница
+ // Маршрут до корневого каталога веб страницы
   server.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {
-    request->send(SPIFFS, "/index.html", "text/html", false, processor);
+ //   request->send(SPIFFS, "/index.html", "text/html");
+	request->send(SPIFFS, "/index.html", "text/html", false, processor);
   });
 
   // Маршрут для загрузки файла style.css
@@ -341,6 +384,35 @@ Serial.println("Connecting to WiFi...");
   });
 
 
+// --------------------->
+// Итак, мы проверяем, содержит ли запрос входные параметры, и сохраняем эти параметры в переменные:
+  // Получите HTTP GET запрос по адресу <ESP_IP>/get?threshold_input=<inputMessage>&enable_arm_input=<inputMessage2>
+  server.on("/get", HTTP_GET, [] (AsyncWebServerRequest *request) {
+/* Это часть кода, где переменные будут заменены значениями, представленными на форме. Переменная inputMessage 
+сохраняет пороговое значение температуры, а переменная inputMessage2 сохраняет, установлен ли флажок или нет 
+(если мы должны контролировать GPIO или нет)*/
+    // ПОЛУЧИТЬ значение threshold_input on <ESP_IP>/get?threshold_input=<inputMessage>
+    if (request->hasParam(PARAM_INPUT_1)) {
+      inputMessage = request->getParam(PARAM_INPUT_1)->value();
+      // ПОЛУЧИТЬ значение enable_arm_input on<ESP_IP>/get?enable_arm_input=<inputMessage2>
+      if (request->hasParam(PARAM_INPUT_2)) {
+        inputMessage2 = request->getParam(PARAM_INPUT_2)->value();
+        enableArmChecked = "checked";
+      }
+      else {
+        inputMessage2 = "false";
+        enableArmChecked = "";
+      }
+    }
+    Serial.println(inputMessage);
+    Serial.println(inputMessage2);
+// После отправки значений в форме отображается новая страница с сообщением, что запрос был успешно отправлен в ESP32 со ссылкой для возврата на домашнюю страницу.
+    request->send(200, "text/html;charset=utf-8", "HTTP GET запрос отправляется ESP32.<br><a href=\"/\">Вернутся на страницу</a>");
+  });
+
+  server.onNotFound(notFound);
+// <--------------------------
+
   AsyncElegantOTA.begin(&server);   // Запускаем ElegantOTA
   server.begin();                   // Запускаем сервер
 }
@@ -353,4 +425,40 @@ void loop() {
   digitalWrite(25, ledState3);
   digitalWrite(26, ledState4);
   digitalWrite(27, ledState5);
+
+// -----------------------------> 
+  // Считываем с датчика показания температуры каждые 5 секунд.
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+  float IN4 = bme.readTemperature()-1.04;
+    Serial.print(IN4);
+    Serial.println("loop *C");
+    lastTemperature = String(IN4);
+    
+/* Получив новое показания температуры, мы сверяем, находится ли она выше или ниже порогового значения, 
+и соответственно включаем или выключаем выход. В этом примере мы устанавливаем выходное состояние на ВЫСОКОЕ, 
+если выполняются все эти условия: Текущая температура выше порога; Включено автоматическое управление выводом 
+(флажок установлен на веб-странице); Если выход еще не был запущен.*/
+    
+    // Проверьте, если температура выше порога и если она должна вызвать выход
+    if(IN4 > inputMessage.toFloat() && inputMessage2 == "true" && !triggerActive){
+      String message = String("Температура выше порога. Текущая температура: ") + 
+        String(IN4) + String("C");
+      Serial.println(message);
+      triggerActive = true;
+      digitalWrite(32, HIGH);
+    }
+// Затем, если температура опускается ниже порога, установите выход на НИЗКИЙ уровень.
+// Проверьте, не находится ли температура ниже порогового значения и не нужно ли вызвать выход
+    else if((IN4 < inputMessage.toFloat()) && inputMessage2 == "true" && triggerActive) {
+      String message = String("Температура ниже порога. Текущая температура: ") + 
+        String(IN4) + String(" C");
+// В зависимости от вашего приложения вы можете изменить выход на НИЗКИЙ, когда температура выше порога , и на ВЫСОКИЙ, когда выход ниже порога.
+      Serial.println(message);
+      triggerActive = false;
+      digitalWrite(32, LOW);
+    }
+  }
+// <-----------------------------
 }

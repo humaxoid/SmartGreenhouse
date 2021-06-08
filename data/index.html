@@ -21,20 +21,28 @@
             <div class="img-block"><img src="teplica.png" alt="picture">
                 <div class="txt-top" style="top:17px; left:700px;"><img src="sungif.gif" height="142" width="172"></div>
 
-                <div class="txt-top" style="top:20px; left:65px;"><img src='temp.png'>&nbsp;&nbsp; Температура:&nbsp;&nbsp;<b><span id="IN1">DATA1</span></b> &nbsp;°C</div>
-                <div class="txt-top" style="top:50px; left:65px;"><img src='humid.png'>&nbsp;&nbsp; Влажность:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN2">DATA2</span></b>&nbsp; &#37;</div>
-                <div class="txt-top" style="top:260px; left:530px;"><img src='sun.png'> Освещенность:&nbsp;&nbsp;<b><span id="IN3">DATA3</span></b> &nbsp;люкс</div>
-                <div class="txt-top" style="top:290px; left:530px;"><img src='temp.png'>&nbsp; Температура &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN4">DATA4</span></b> &nbsp;°C</div>
-                <div class="txt-top" style="top:320px; left:530px;"><img src='flame.png'>&nbsp; Давление: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN5">DATA5</span></b> &nbsp;мм.рт.ст</div>
-                <div class="txt-top" style="top:350px; left:530px;"><img src='humid.png'>&nbsp; Влажность: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN6">DATA6</span></b>&nbsp; &#37;</div>
-                <div class="txt-top" style="top:485px; left:219px;"><img src='temp.png'>&nbsp;<b><span id="IN7">DATA7</span></b> &nbsp;°C</div>
-                <div class="txt-top" style="top:515px; left:219px;"><img src='humid.png'>&nbsp;<b><span id="IN8">DATA8</span></b>&nbsp; &#37;</div>
+                <div class="txt-top" style="top:20px; left:65px;"><img src='temp.png'>&nbsp;&nbsp; Температура:&nbsp;&nbsp;<b><span id="IN1">%DATA1%</span></b> &nbsp;°C</div>
+                <div class="txt-top" style="top:50px; left:65px;"><img src='humid.png'>&nbsp;&nbsp; Влажность:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN2">%DATA2%</span></b>&nbsp; &#37;</div>
+                <div class="txt-top" style="top:260px; left:530px;"><img src='sun.png'> Освещенность:&nbsp;&nbsp;<b><span id="IN3">%DATA3%</span></b> &nbsp;люкс</div>
+                <div class="txt-top" style="top:290px; left:530px;"><img src='temp.png'>&nbsp; Температура &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN4">%DATA4%</span></b> &nbsp;°C</div>
+                <div class="txt-top" style="top:320px; left:530px;"><img src='flame.png'>&nbsp; Давление: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN5">%DATA5%</span></b> &nbsp;мм.рт.ст</div>
+                <div class="txt-top" style="top:350px; left:530px;"><img src='humid.png'>&nbsp; Влажность: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN6">%DATA6%</span></b>&nbsp; &#37;</div>
+                <div class="txt-top" style="top:485px; left:219px;"><img src='temp.png'>&nbsp;<b><span id="IN7">%DATA7%</span></b> &nbsp;°C</div>
+                <div class="txt-top" style="top:515px; left:219px;"><img src='humid.png'>&nbsp;<b><span id="IN8">%DATA8%</span></b>&nbsp; &#37;</div>
                 
                 <div class="txt-top" style="top:155px; right:-150px;"><p class="description">GPIO 32:</p><button id="button1" class="button"><span id="state1">%STATE1%</span></button></div>
                 <div class="txt-top" style="top:235px; right:-150px;"><p class="description">GPIO 33:</p><button id="button2" class="button"><span id="state2">%STATE2%</span></button></div>
                 <div class="txt-top" style="top:315px; right:-150px;"><p class="description">GPIO 25:</p><button id="button3" class="button"><span id="state3">%STATE3%</span></button></div>
                 <div class="txt-top" style="top:395px; right:-150px;"><p class="description">GPIO 26:</p><button id="button4" class="button"><span id="state4">%STATE4%</span></button></div>
                 <div class="txt-top" style="top:475px; right:-150px;"><p class="description">GPIO 27:</p><button id="button5" class="button"><span id="state5">%STATE5%</span></button></div>
+
+				<div class="txt-top" style='top:200px; right:870px;'>
+				<form action="/get">
+                Температурный порог <input type="number" step="0.5" name="threshold_input" value="%THRESHOLD%" required><br>
+                Авто <input type="checkbox" name="enable_arm_input" value="true" %ENABLE_ARM_INPUT%><br><br>
+                <input type="submit" value="Применить">
+                </form>
+				</div>
 
                 <div class="txt-top" style="top:520px; left:-100px;"><form action="http://192.168.66.68/update" method="get" target="_blank"><button type="submit">Обновление ПО</button></div>
              </div>
