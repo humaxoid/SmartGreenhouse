@@ -1,134 +1,45 @@
 <!DOCTYPE html>
-
 <html>
-
 <head>
-    <title>Smart Greenhouse</title>
-    <meta charset="utf-8" name="viewport" content="width=device-width, initial-scale=1">
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="data:,">
     <link rel="stylesheet" type="text/css" href="style.css">
+    <title>ESP Web Server</title>
 </head>
-
 <body id="gradient">
-
     <center>
-        <p><img alt="home" height="70" width="72" src="casa.png"><font size="7" color="#FFFFFF"> &nbsp;&nbsp; Сontrol panel - "Smart greenhouse"</font></p>
+        <p><img alt="house" height="70" width="72" src="casa.png">
+            <font size="7" color="#FFFFFF">  Контрольная панель - "Умная теплица"</font>
+        </p>
     </center>
-
     <div class="wrapper">
-        <div class="title"><hr noshade size="3px"></div>
+        <div class="title">
+            <hr noshade size="3px">
+        </div>
         <div class="content">
-            <div class="txt-top" style="top:147px; left:900px;"><img src='sungif.gif' height="142" width="172"></div>
-            <div class="img-block"><img src="teplica.png" alt="pic">
+            <div class="img-block"><img src="teplica.png" alt="picture">
+                <div class="txt-top" style="top:17px; left:700px;"><img src="sungif.gif" height="142" width="172"></div>
 
+                <div class="txt-top" style="top:20px; left:65px;"><img src='temp.png'>&nbsp;&nbsp; Температура:&nbsp;&nbsp;<b><span id="IN1">DATA1</span></b> &nbsp;°C</div>
+                <div class="txt-top" style="top:50px; left:65px;"><img src='humid.png'>&nbsp;&nbsp; Влажность:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN2">DATA2</span></b>&nbsp; &#37;</div>
+                <div class="txt-top" style="top:260px; left:530px;"><img src='sun.png'> Освещенность:&nbsp;&nbsp;<b><span id="IN3">DATA3</span></b> &nbsp;люкс</div>
+                <div class="txt-top" style="top:290px; left:530px;"><img src='temp.png'>&nbsp; Температура &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN4">DATA4</span></b> &nbsp;°C</div>
+                <div class="txt-top" style="top:320px; left:530px;"><img src='flame.png'>&nbsp; Давление: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN5">DATA5</span></b> &nbsp;мм.рт.ст</div>
+                <div class="txt-top" style="top:350px; left:530px;"><img src='humid.png'>&nbsp; Влажность: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN6">DATA6</span></b>&nbsp; &#37;</div>
+                <div class="txt-top" style="top:485px; left:219px;"><img src='temp.png'>&nbsp;<b><span id="IN7">DATA7</span></b> &nbsp;°C</div>
+                <div class="txt-top" style="top:515px; left:219px;"><img src='humid.png'>&nbsp;<b><span id="IN8">DATA8</span></b>&nbsp; &#37;</div>
+                
+                <div class="txt-top" style="top:155px; right:-150px;"><p class="description">GPIO 32:</p><button id="button1" class="button"><span id="state1">%STATE1%</span></button></div>
+                <div class="txt-top" style="top:235px; right:-150px;"><p class="description">GPIO 33:</p><button id="button2" class="button"><span id="state2">%STATE2%</span></button></div>
+                <div class="txt-top" style="top:315px; right:-150px;"><p class="description">GPIO 25:</p><button id="button3" class="button"><span id="state3">%STATE3%</span></button></div>
+                <div class="txt-top" style="top:395px; right:-150px;"><p class="description">GPIO 26:</p><button id="button4" class="button"><span id="state4">%STATE4%</span></button></div>
+                <div class="txt-top" style="top:475px; right:-150px;"><p class="description">GPIO 27:</p><button id="button5" class="button"><span id="state5">%STATE5%</span></button></div>
 
-                <div class="txt-top" style="top:20px; left:65px;"><img src='temp.png'>&nbsp;&nbsp; Temperature:&nbsp;&nbsp;<b><span id="IN1">%DATA1%</span></b> &nbsp;°C</div>
-                <div class="txt-top" style="top:50px; left:65px;"><img src='humid.png'>&nbsp;&nbsp; Рumidity:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN2">%DATA2%</span></b>&nbsp; &#37;</div>
-                <div class="txt-top" style="top:260px; left:550px;"><img src='sun.png'> lighting:&nbsp;&nbsp;<b><span id="IN3">%DATA3%</span></b> &nbsp;люкс</div>
-                <div class="txt-top" style="top:290px; left:550px;"><img src='temp.png'>&nbsp; Temperature &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN4">%DATA4%</span></b> &nbsp;°C</div>
-                <div class="txt-top" style="top:320px; left:550px;"><img src='flame.png'>&nbsp; Pressure: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN5">%DATA5%</span></b> &nbsp;мм.рт.ст</div>
-                <div class="txt-top" style="top:350px; left:550px;"><img src='humid.png'>&nbsp; Humidity: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN6">%DATA6%</span></b>&nbsp; &#37;</div>
-                <div class="txt-top" style="top:485px; left:239px;"><img src='temp.png'>&nbsp;<b><span id="IN7">%DATA7%</span></b> &nbsp;°C</div>
-                <div class="txt-top" style="top:515px; left:239px;"><img src='humid.png'>&nbsp;<b><span id="IN8">%DATA8%</span></b>&nbsp; &#37;</div>
-
-                <div class=txt-top style='top:155px; right:-200px;'><p>Top Windows <strong>%STATE1%</strong></p><p><a href="/on1"><button class="button">ON</button></a><a href="/off1"><button class="button button2">OFF</button></a></p></div>
-				<div class=txt-top style='top:235px; right:-200px;'><p>Low Windows <strong>%STATE2%</strong></p><p><a href="/on2"><button class="button">ON</button></a><a href="/off2"><button class="button button2">OFF</button></a></p></div>
-				<div class=txt-top style='top:315px; right:-200px;'><p>Watering-1 <strong>%STATE3%</strong></p><p><a href="/on3"><button class="button">ON</button></a><a href="/off3"><button class="button button2">OFF</button></a></p></div>
-				<div class=txt-top style='top:395px; right:-200px;'><p>Watering-2 <strong>%STATE4%</strong></p><p><a href="/on4"><button class="button">ON</button></a><a href="/off4"><button class="button button2">OFF</button></a></p></div>
-				<div class=txt-top style='top:475px; right:-200px;'><p>Watering-3 <strong>%STATE5%</strong></p><p><a href="/on5"><button class="button">ON</button></a><a href="/off5"><button class="button button2">OFF</button></a></p></div>
-            </div>
+                <div class="txt-top" style="top:520px; left:-100px;"><form action="http://192.168.66.68/update" method="get" target="_blank"><button type="submit">Обновление ПО</button></div>
+             </div>
         </div>
     </div>
-
+    <script src="script.js"></script>
 </body>
-<script>
-    setInterval(function() {
-        var xhttp = new XMLHttpRequest();
-        xhttp.onreadystatechange = function() {
-            if (this.readyState == 4 && this.status == 200) {
-                document.getElementById("IN1").innerHTML = this.responseText;
-            }
-        };
-        xhttp.open("GET", "/IN1", true);
-        xhttp.send();
-    }, 5000);
-
-    setInterval(function() {
-        var xhttp = new XMLHttpRequest();
-        xhttp.onreadystatechange = function() {
-            if (this.readyState == 4 && this.status == 200) {
-                document.getElementById("IN2").innerHTML = this.responseText;
-            }
-        };
-        xhttp.open("GET", "/IN2", true);
-        xhttp.send();
-    }, 5000);
-
-    setInterval(function() {
-        var xhttp = new XMLHttpRequest();
-        xhttp.onreadystatechange = function() {
-            if (this.readyState == 4 && this.status == 200) {
-                document.getElementById("IN3").innerHTML = this.responseText;
-            }
-        };
-        xhttp.open("GET", "/IN3", true);
-        xhttp.send();
-    }, 5000);
-
-    setInterval(function() {
-        var xhttp = new XMLHttpRequest();
-        xhttp.onreadystatechange = function() {
-            if (this.readyState == 4 && this.status == 200) {
-                document.getElementById("IN4").innerHTML = this.responseText;
-            }
-        };
-        xhttp.open("GET", "/IN4", true);
-        xhttp.send();
-    }, 5000);
-
-    setInterval(function() {
-        var xhttp = new XMLHttpRequest();
-        xhttp.onreadystatechange = function() {
-            if (this.readyState == 4 && this.status == 200) {
-                document.getElementById("IN5").innerHTML = this.responseText;
-            }
-        };
-        xhttp.open("GET", "/IN5", true);
-        xhttp.send();
-    }, 5000);
-
-    setInterval(function() {
-        var xhttp = new XMLHttpRequest();
-        xhttp.onreadystatechange = function() {
-            if (this.readyState == 4 && this.status == 200) {
-                document.getElementById("IN6").innerHTML = this.responseText;
-            }
-        };
-        xhttp.open("GET", "/IN6", true);
-        xhttp.send();
-    }, 5000);
-
-    setInterval(function() {
-        var xhttp = new XMLHttpRequest();
-        xhttp.onreadystatechange = function() {
-            if (this.readyState == 4 && this.status == 200) {
-                document.getElementById("IN7").innerHTML = this.responseText;
-            }
-        };
-        xhttp.open("GET", "/IN7", true);
-        xhttp.send();
-    }, 5000);
-
-    setInterval(function() {
-        var xhttp = new XMLHttpRequest();
-        xhttp.onreadystatechange = function() {
-            if (this.readyState == 4 && this.status == 200) {
-                document.getElementById("IN8").innerHTML = this.responseText;
-            }
-        };
-        xhttp.open("GET", "/IN8", true);
-        xhttp.send();
-    }, 5000);
-</script>
-
 </html>
