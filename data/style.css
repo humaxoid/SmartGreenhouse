@@ -7,55 +7,106 @@ background: -o-linear-gradient(to bottom, #589afc, #f0f5fc); /* Opera 11.1-12 */
 background: linear-gradient(to bottom, #589afc, #f0f5fc); /* Opera 15+, Chrome 25+, IE 10+, Firefox 16+, Safari 6.1+, iOS 7+, Android 4.4+ */
 }
 
+/*------------ Позиционирование заголовка: Контрольная панель - "Умная теплица" ---------- */
+#home {                   /* размер иконки (домик) */
+    width: 72px;          
+    height: 70px;
+}
+
+p {
+    text-indent: 50px;
+}
+	
+ h1 {	 
+    text-align: center;   /* центровка заголовка */
+	font-size: 40px;      /* размер шрифта заголовка */
+	text-shadow: 3px 2px gray;   /* тень */
+}
+
+/* -------------- Линия----------------*/
+.hr-shadow {
+	margin: 20px 0;
+	padding: 0;
+	height: 10px;
+	border: none;
+	border-top: 1px solid #333;
+	box-shadow: 0 10px 10px -10px #8c8b8b inset;
+}
+
 /*---------------- Позиционирование картинки и наложение на нее данных -------------------- */
 .wrapper{min-height: 87vh; display: flex; flex-direction: column;} /* отступ картинки сверху*/
 .title{text-align: center;}
 .content{flex-grow: 1; display: flex; justify-content: center; align-items: center;}
-.img-block{max-width: 1100px; position: relative;}   /* размер картинки*/
+.img-block{max-width: 900px; position: relative;}   /* размер и позиционирование картинки*/
 .img-block img{max-width: 100%;} 
 .txt-top, .txt-bottom{position: absolute;}          /* позиционирование текста*/
 .txt-top {top: font-size:1.3em; color:red}          /* отступ слева и сверху для верхней надписи*/
 
-/*---------------- стиль кнопок «ON» и «OFF»; -------------------- */
-html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}
-.button { background-color: #1d32f0; border: none; color: white; padding: 3px 21px;
-text-decoration: none; font-size: 20px; margin: 2px; cursor: pointer;}
-.button2 {background-color: #878686;}
-
-/*---------------- кнопки -------------------- 
-html {
-  font-family: Arial;
-  display: inline-block;
-  margin: 0px auto;
-  text-align: center;
-}
-h1 {
-  color: #0F3376;
-  padding: 2vh;
-}
-p {
-  font-size: 1.5rem;
-}
+/*---------------- стиль кнопок «ON» и «OFF» -------------------- */
 .button {
-  display: inline-block;
-  background-color: #008CBA;
+  padding: 5px 43px;             /*высота и ширина кнопки*/
+  font-size: 18px;               /*размер шрифта кнопки (размер кнопки адаптируется под размер шрифта)*/
+  text-align: center;            /*центровка надписи внутри кнопки*/
+  outline: none;
+  color: #fff;                   /*цвет шрифта в кнопке*/
+  background-color: #c90411;     /*цвет кнопки*/
   border: none;
-  border-radius: 4px;
-  color: white;
-  padding: 16px 40px;
-  text-decoration: none;
-  font-size: 30px;
-  margin: 2px;
-  cursor: pointer;
-}
-.button2 {
-  background-color: #f44336;
-}
-/*.units {
-  font-size: 1.2rem;
+  border-radius: 5px;            /*радиус закругления углов кнопки*/
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
  }
-.sensor-labels {
-  font-size: 1.5rem;
-  vertical-align:middle;
-  padding-bottom: 15px;
-} */
+ 
+/*  button:hover {background-color: #6b0f8c} /* Цвет кнопки при наведении */
+ .button:active {
+   background-color: #0f8b8d;
+   box-shadow: 2 2px #cdcdcd;
+   transform: translateY(2px);
+ }
+ 
+ .description {
+   font-size: 1.1rem;  /* размер шрифта описания кнопки */
+   color:#ffffff;      /* цвет шрифта описания кнопки*/
+   font-weight: bold;
+   text-align: center; /*центровка надписи относительно кнопки*/
+ }
+ 
+ /*---------------- Окно ввода температурного порога -------------------- */
+.txt-left, .txt-bottom{position: absolute;}           /* позиционирование текста*/
+.txt-left {left: font-size:1.3em; color:bold}      /* отступ слева и сверху для верхней надписи*/
+
+ #dva1 {
+  width: 4em; /*Длинна окна*/
+}
+
+#dva1::-webkit-inner-spin-button { 
+  opacity: 1; /*Показать стрелки в окне*/
+}
+
+ #dva2 {
+  width: 4em; /*Длинна окна*/
+}
+
+#dva2::-webkit-inner-spin-button { 
+  opacity: 1; /*Показать стрелки в окне*/
+}
+
+ #dva3 {
+  width: 4em; /*Длинна окна*/
+}
+
+#dva3::-webkit-inner-spin-button { 
+  opacity: 1; /*Показать стрелки в окне*/
+}
+
+ #dva4 {
+  width: 4em; /*Длинна окна*/
+}
+
+#dva4::-webkit-inner-spin-button { 
+  opacity: 1; /*Показать стрелки в окне*/
+}
