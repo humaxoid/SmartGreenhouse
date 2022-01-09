@@ -10,8 +10,8 @@
 // Задаем сетевые настройки
 const char *ssid = "user_name";
 const char *password = "password";
-IPAddress local_IP(192, 168, 1, 68); // Задаем статический IP-адрес: аналогичный адрес прописать в файле index.html
-IPAddress gateway(192, 168, 1, 102); // Задаем IP-адрес сетевого шлюза:
+IPAddress local_IP(192, 168, 1, 68);  // Задаем статический IP-адрес: аналогичный адрес прописать в файле index.html
+IPAddress gateway(192, 168, 1, 102);  // Задаем IP-адрес сетевого шлюза:
 IPAddress subnet(255, 255, 255, 0);   // Задаем маску сети:
 IPAddress primaryDNS(8, 8, 8, 8);     // Основной ДНС (опционально)
 IPAddress secondaryDNS(8, 8, 4, 4);   // Резервный ДНС (опционально)
