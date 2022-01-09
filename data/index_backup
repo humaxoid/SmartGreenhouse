@@ -15,7 +15,7 @@
             <div class="img-block"><img src="teplica.png" alt="picture">
                 <div class="txt-top" style="top:17px; left:700px;"><img src="sungif.gif" alt="" height="142" width="172"></div>
 
-                 <div class="txt-right" style='top:150px; left:-150px;'>
+                 <div class="txt-right" style='top:200px; left:-150px;'>
                  <label for="threshold_input1"><b>t °C откр. &nbsp; t °C закр.</b><br><br>&nbsp; Верхняя форточка</label>
                  <form action="/get">
 				 <input type="number" min="24" max="31" step="0.5" id="dva1" title="Введите температурный порог открытия форточки" name="threshold_input1" value="%THRESHOLD1%" required>&nbsp; &nbsp;
@@ -26,45 +26,28 @@
                  <input type="number" min="24" max="31" step="0.5" id="dva3" title="Введите температурный порог открытия форточки" name="threshold_input2" value="%THRESHOLD2%" required>&nbsp; &nbsp;
                  <input type="number" min="23" max="30" step="0.5" id="dva4" title="Введите температурный порог закрытия форточек" name="threshold_input2_1" value="%THRESHOLD2_1%" required>
 				 <br>
-                 <br>
-                 <br>
-				 <label for="time_input3"><b>Период &nbsp; &nbsp; &nbsp; Длительн </b><br><br>&nbsp; &nbsp; &nbsp; &nbsp; Грядка №1</label>
-                 <br>
-				 <input type="number" min="6" max="23" step="1" id="dva1" title="Введите интервал включения полива в часах" name="time_input3" value="%TIME3%" required>&nbsp; &nbsp;
-				 <input type="number" min="1" max="18" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input3_1" value="%TIME3_1%" required>
 				 <br>
-                 <label for="time_input3">&nbsp; &nbsp; &nbsp; &nbsp; Грядка №2 </label>
 				 <br>
-				 <input type="number" min="6" max="23" step="1" id="dva1" title="Введите интервал включения полива в часах" name="time_input4" value="%TIME4%" required>&nbsp; &nbsp;
-				 <input type="number" min="1" max="18" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input4_1" value="%TIME4_1%" required>
-				 <br>
-                 <label for="time_input3">&nbsp; &nbsp; &nbsp; &nbsp; Грядка №3 </label>
-                 <br>
-				 <input type="number" min="6" max="23" step="1" id="dva1" title="Введите интервал включения полива в часах" name="time_input5" value="%TIME5%" required>&nbsp; &nbsp;
-				 <input type="number" min="1" max="18" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input5_1" value="%TIME5_1%" required>
-				 <br>
-                 <!---
-				<br>
 				 <label for="time1"><b>Интерв. &nbsp; &nbsp; &nbsp; Длительн.</b><br><br>&nbsp; Таймер полива №1 </label>	
                  <br>
                  <input type="time" id="appt" title="Введите время включения полива" name="int1" min="20:00" max="23:00" value="20:10" step="600" required>&nbsp; &nbsp;				 
                  <input type="time" id="appt" title="Введите продолжительность полива" name="dur1_1" value="03:00" required>
                  <br>
-                 <label for="time2">&nbsp; Таймер полива №2 </label> -
+                 <label for="time2">&nbsp; Таймер полива №2 </label>
 				 <br>
 				 <input type="time" id="appt" title="Введите время включения полива" name="int1" min="20:00" max="23:00" value="20:10" step="600" required>&nbsp; &nbsp;
                  <input type="time" id="appt" title="Введите продолжительность полива" name="dur2_1" value="02:00" required>
 				 <br>
-				 <label for="time3">&nbsp; Таймер полива №3 </label> 
+				 <label for="time3">&nbsp; Таймер полива №3 </label>
 				 <br>
-				 <input type="time" id="appt" title="Введите время включения полива" name="time_input4" min="00:01" max="23:00" value="20:10" step="600" required>&nbsp; &nbsp;
-                 <input type="time" id="appt" title="Введите продолжительность полива" name="time_input4_1" value="00:01" required>
-                  https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/time -->
+				 <input type="time" id="appt" title="Введите время включения полива" name="int1" min="20:00" max="23:00" value="20:10" step="600" required>&nbsp; &nbsp;
+                 <input type="time" id="appt" title="Введите продолжительность полива" name="dur3_1" value="02:00" required>
+				 <!-- https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/time -->
 				 <br>
                  <br>
 				 <label for="enable_arm_input">Авто</label> 
 				 <input type="checkbox" name="enable_arm_input" value="true" %ENABLE_ARM_INPUT%>
-				 <input type="submit" value="Применить">
+				 <input type="submit" value="Отправить">
                  </form></div>
 
                 <div class="txt-top" style="top:20px; left:65px;"><img src='temp.png' alt="">&nbsp;&nbsp; Температура:&nbsp;&nbsp;<b><span id="IN1"></span></b> &nbsp;°C</div>

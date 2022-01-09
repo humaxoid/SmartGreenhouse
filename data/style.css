@@ -18,8 +18,8 @@ p {
 }
 	
  h1 {	 
-    text-align: center;   /* центровка заголовка */
-	font-size: 40px;      /* размер шрифта заголовка */
+    text-align: center;          /* центровка заголовка */
+	font-size: 40px;             /* размер шрифта заголовка */
 	text-shadow: 3px 2px gray;   /* тень */
 }
 
@@ -48,8 +48,8 @@ p {
   font-size: 18px;               /*размер шрифта кнопки (размер кнопки адаптируется под размер шрифта)*/
   text-align: center;            /*центровка надписи внутри кнопки*/
   outline: none;
-  color: #fff;                   /*цвет шрифта в кнопке*/
-  background-color: #c90411;     /*цвет кнопки*/
+  color: #fff;                 /*цвет шрифта в кнопке*/
+  background-color: #c90411;   /*цвет кнопки*/
   border: none;
   border-radius: 5px;            /*радиус закругления углов кнопки*/
   -webkit-touch-callout: none;
@@ -76,8 +76,8 @@ p {
  }
  
  /*---------------- Окно ввода температурного порога -------------------- */
-.txt-left, .txt-bottom{position: absolute;}           /* позиционирование текста*/
-.txt-left {left: font-size:1.3em; color:bold}      /* отступ слева и сверху для верхней надписи*/
+.txt-right {position: absolute;}                    /* позиционирование текста*/
+.txt-right {left: font-size: 1.3em; color:bold}     /* отступ слева и сверху для верхней надписи*/
 
  #dva1 {
   width: 4em; /*Длинна окна*/
@@ -109,4 +109,9 @@ p {
 
 #dva4::-webkit-inner-spin-button { 
   opacity: 1; /*Показать стрелки в окне*/
+}
+
+ /*---------------- Окно ввода времени таймеров -------------------- */
+ #appt {
+  width: 6em; /*Длинна окна
 }
