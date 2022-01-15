@@ -260,6 +260,9 @@ void setup()
 
   server.on("/sungif.gif", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send(SPIFFS, "/sungif.gif", "image/gif"); });
+  
+  server.on("/baklazan.gif", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send(SPIFFS, "/baklazan.gif", "image/gif"); });
 
   server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send(SPIFFS, "/favicon.ico", "image/ico"); });
