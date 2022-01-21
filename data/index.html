@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,91 +8,93 @@
     <link rel="stylesheet" href="style.css">
     <title>ESP Web Server</title>
 </head>
+
 <body id="gradient">
- <h1 style="color:#FFFFFF;"><img id="home" src="casa.png" alt=""> Контрольная панель - "Умная теплица"</h1>
-    <div class="wrapper">
-	<hr class="hr-shadow">
-        <div class="content">
+        <div class="wrapper">
+          <h1 style="color:#FFFFFF;"><img id="home" src="casa.png" alt="img"> Контрольная панель - "Умная теплица"</h1>
+            <hr class="hr-shadow">
             <div class="img-block"><img src="teplica.png" alt="picture">
-                <div class="txt-top" style="top:17px; left:700px;"><img src="sungif.gif" alt="" height="142" width="172"></div>
-	        <div class="txt-top" style="top:430px; left:105px;"><img src="baklazan.gif" alt="" height="120" width="80"></div>
-		<div class="txt-top" style="top:430px; left:365px;"><img src="baklazan.gif" alt="" height="120" width="80"></div>
-		<div class="txt-top" style="top:430px; left:470px;"><img src="baklazan.gif" alt="" height="120" width="80"></div>
-		<div class="txt-top" style="top:430px; left:730px;"><img src="baklazan.gif" alt="" height="120" width="80"></div>
-	        <!-- <div class="txt-top" style="top:32px; left:512px;"><img src="win_up.gif" alt="" height="115" width="102"></div>
-                <div class="txt-top" style="top:32px; left:512px;"><img src="win_down.gif" alt="" height="115" width="102"></div> -->
-		      
-                 <div class="txt-right" style='top:150px; left:-150px;'>
-                 <label for="threshold_input1"><b>t °C откр. &nbsp; t °C закр.</b><br><br>&nbsp; Верхняя форточка</label>
-                 <form action="/get">
-				 <input type="number" min="24" max="31" step="0.5" id="dva1" title="Введите температурный порог открытия форточки" name="threshold_input1" value="%THRESHOLD1%" required>&nbsp; &nbsp;
-                 <input type="number" min="23" max="30" step="0.5" id="dva2" title="Введите температурный порог закрытия форточек" name="threshold_input1_1" value="%THRESHOLD1_1%" required>
-                 <br>
-                 <label for="threshold_input2">&nbsp; Нижние форточки </label>
-				 <br>
-                 <input type="number" min="24" max="31" step="0.5" id="dva3" title="Введите температурный порог открытия форточки" name="threshold_input2" value="%THRESHOLD2%" required>&nbsp; &nbsp;
-                 <input type="number" min="23" max="30" step="0.5" id="dva4" title="Введите температурный порог закрытия форточек" name="threshold_input2_1" value="%THRESHOLD2_1%" required>
-				 <br>
-                 <br>
-                 <br>
-				 <label for="time_input3"><b>Период &nbsp; &nbsp; &nbsp; Длительн </b><br><br>&nbsp; &nbsp; &nbsp; &nbsp; Грядка №1</label>
-                 <br>
-				 <input type="number" min="6" max="23" step="1" id="dva1" title="Введите интервал включения полива в часах" name="time_input3" value="%TIME3%" required>&nbsp; &nbsp;
-				 <input type="number" min="1" max="18" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input3_1" value="%TIME3_1%" required>
-				 <br>
-                 <label for="time_input3">&nbsp; &nbsp; &nbsp; &nbsp; Грядка №2 </label>
-				 <br>
-				 <input type="number" min="6" max="23" step="1" id="dva1" title="Введите интервал включения полива в часах" name="time_input4" value="%TIME4%" required>&nbsp; &nbsp;
-				 <input type="number" min="1" max="18" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input4_1" value="%TIME4_1%" required>
-				 <br>
-                 <label for="time_input3">&nbsp; &nbsp; &nbsp; &nbsp; Грядка №3 </label>
-                 <br>
-				 <input type="number" min="6" max="23" step="1" id="dva1" title="Введите интервал включения полива в часах" name="time_input5" value="%TIME5%" required>&nbsp; &nbsp;
-				 <input type="number" min="1" max="18" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input5_1" value="%TIME5_1%" required>
-				 <br>
-                 <!---
-				<br>
-				 <label for="time1"><b>Интерв. &nbsp; &nbsp; &nbsp; Длительн.</b><br><br>&nbsp; Таймер полива №1 </label>	
-                 <br>
-                 <input type="time" id="appt" title="Введите время включения полива" name="int1" min="20:00" max="23:00" value="20:10" step="600" required>&nbsp; &nbsp;				 
-                 <input type="time" id="appt" title="Введите продолжительность полива" name="dur1_1" value="03:00" required>
-                 <br>
-                 <label for="time2">&nbsp; Таймер полива №2 </label> -
-				 <br>
-				 <input type="time" id="appt" title="Введите время включения полива" name="int1" min="20:00" max="23:00" value="20:10" step="600" required>&nbsp; &nbsp;
-                 <input type="time" id="appt" title="Введите продолжительность полива" name="dur2_1" value="02:00" required>
-				 <br>
-				 <label for="time3">&nbsp; Таймер полива №3 </label> 
-				 <br>
-				 <input type="time" id="appt" title="Введите время включения полива" name="time_input4" min="00:01" max="23:00" value="20:10" step="600" required>&nbsp; &nbsp;
-                 <input type="time" id="appt" title="Введите продолжительность полива" name="time_input4_1" value="00:01" required>
-                  https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/time -->
-				 <br>
-                 <br>
-				 <label for="enable_arm_input">Авто</label> 
-				 <input type="checkbox" name="enable_arm_input" value="true" %ENABLE_ARM_INPUT%>
-				 <input type="submit" value="Применить">
-                 </form></div>
+                <div class="txt-top" style="top:0px; left:700px;"><img src="sungif.gif" alt="img" height="142" width="172"></div>
+                <!-- <div class="txt-top" style="top:32px; left:512px;"><img src="win_up.gif" alt="img" height="115" width="102"></div>
+                <div class="txt-top" style="top:32px; left:512px;"><img src="win_down.gif" alt="img" height="115" width="102"></div> -->
+		<div class="txt-top" style="top:20px; left:65px;"><img src='temp.png' alt="img">&nbsp;&nbsp; Температура:&nbsp;&nbsp;<b><span id="IN1"></span></b> &nbsp;°C</div>
+                <div class="txt-top" style="top:50px; left:65px;"><img src='humid.png' alt="img">&nbsp;&nbsp; Влажность:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN2"></span></b>&nbsp; &#37;</div>
+                <div class="txt-top" style="top:260px; left:530px;"><img src='sun.png' alt="img"> Освещенность:&nbsp;&nbsp;<b><span id="IN3"></span></b> &nbsp;люкс</div>
+                <div class="txt-top" style="top:290px; left:530px;"><img src='temp.png' alt="img">&nbsp; Температура &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN4">%DATA4%</span></b> &nbsp;°C</div>
+                <div class="txt-top" style="top:320px; left:530px;"><img src='flame.png' alt="img">&nbsp; Давление: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN5"></span></b> &nbsp;мм.рт.ст</div>
+                <div class="txt-top" style="top:350px; left:530px;"><img src='humid.png' alt="img">&nbsp; Влажность: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN6"></span></b>&nbsp; &#37;</div>
+                <div class="txt-top" style="top:485px; left:219px;"><img src='temp.png' alt="img">&nbsp;<b><span id="IN7"></span></b> &nbsp;°C</div>
+                <div class="txt-top" style="top:515px; left:219px;"><img src='humid.png' alt="img">&nbsp;<b><span id="IN8"></span></b>&nbsp; &#37;</div>
+                <div class="txt-top" style="top:0px; left:700px;"><img src="sungif.gif" alt="img" height="142" width="172"></div>
+                <div class="txt-top" style="top:430px; left:105px;"><img src="baklazan.gif" alt="img" height="120" width="80"></div>
+                <div class="txt-top" style="top:430px; left:365px;"><img src="baklazan.gif" alt="img" height="120" width="80"></div>
+                <div class="txt-top" style="top:430px; left:470px;"><img src="baklazan.gif" alt="img" height="120" width="80"></div>
+                <div class="txt-top" style="top:430px; left:730px;"><img src="baklazan.gif" alt="img" height="120" width="80"></div>
 
-                <div class="txt-top" style="top:20px; left:65px;"><img src='temp.png' alt="">&nbsp;&nbsp; Температура:&nbsp;&nbsp;<b><span id="IN1"></span></b> &nbsp;°C</div>
-                <div class="txt-top" style="top:50px; left:65px;"><img src='humid.png' alt="">&nbsp;&nbsp; Влажность:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN2"></span></b>&nbsp; &#37;</div>
-                <div class="txt-top" style="top:260px; left:530px;"><img src='sun.png' alt=""> Освещенность:&nbsp;&nbsp;<b><span id="IN3"></span></b> &nbsp;люкс</div>
-                <div class="txt-top" style="top:290px; left:530px;"><img src='temp.png' alt="">&nbsp; Температура &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN4">%DATA4%</span></b> &nbsp;°C</div>
-                <div class="txt-top" style="top:320px; left:530px;"><img src='flame.png' alt="">&nbsp; Давление: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN5"></span></b> &nbsp;мм.рт.ст</div>
-                <div class="txt-top" style="top:350px; left:530px;"><img src='humid.png' alt="">&nbsp; Влажность: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<b><span id="IN6"></span></b>&nbsp; &#37;</div>
-                <div class="txt-top" style="top:485px; left:219px;"><img src='temp.png' alt="">&nbsp;<b><span id="IN7"></span></b> &nbsp;°C</div>
-                <div class="txt-top" style="top:515px; left:219px;"><img src='humid.png' alt="">&nbsp;<b><span id="IN8"></span></b>&nbsp; &#37;</div>
+                <div class="txt-left" style='top:150px; left:-150px;'>
+                <label for="threshold_input1"><b>t °C откр. &nbsp; t °C закр.</b><br><br>&nbsp; Верхняя форточка</label>
+                <form action="/get">
+                <input type="number" min="24" max="31" step="0.5" id="dva1" title="Введите температурный порог открытия форточки" name="threshold_input1"value="%THRESHOLD1%" required>&nbsp; &nbsp;
+                <input type="number" min="23" max="30" step="0.5" id="dva2" title="Введите температурный порог закрытия форточек" name="threshold_input1_1" value="%THRESHOLD1_1%" required>
+                <br>
+                <label for="threshold_input2">&nbsp; Нижние форточки </label>
+                <br>
+                <input type="number" min="24" max="31" step="0.5" id="dva3" title="Введите температурный порог открытия форточки" name="threshold_input2" value="%THRESHOLD2%" required>&nbsp; &nbsp;
+                <input type="number" min="23" max="30" step="0.5" id="dva4" title="Введите температурный порог закрытия форточек" name="threshold_input2_1"value="%THRESHOLD2_1%" required>
+                <br>
+                <br>
+                <br>
+                <label for="time_input3"><b>Период &nbsp; &nbsp; &nbsp; Длительн </b><br><br>&nbsp; &nbsp; &nbsp; &nbsp; Грядка №1</label>
+                <br>
+                <input type="number" min="6" max="23" step="1" id="dva1" title="Введите интервал включения полива в часах" name="time_input3" value="%TIME3%" required>&nbsp; &nbsp;
+                <input type="number" min="1" max="18" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input3_1" value="%TIME3_1%" required>
+                <br>
+                <label for="time_input3">&nbsp; &nbsp; &nbsp; &nbsp; Грядка №2 </label>
+                <br>
+                <input type="number" min="6" max="23" step="1" id="dva1" title="Введите интервал включения полива в часах" name="time_input4" value="%TIME4%" required>&nbsp; &nbsp;
+                <input type="number" min="1" max="18" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input4_1" value="%TIME4_1%" required>
+                <br>
+                <label for="time_input3">&nbsp; &nbsp; &nbsp; &nbsp; Грядка №3 </label>
+                <br>
+                <input type="number" min="6" max="23" step="1" id="dva1" title="Введите интервал включения полива в часах" name="time_input5" value="%TIME5%" required>&nbsp; &nbsp;
+                <input type="number" min="1" max="18" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input5_1" value="%TIME5_1%" required>
+                <br>
+                <!---
+		<br>
+		<label for="time1"><b>Интерв. &nbsp; &nbsp; &nbsp; Длительн.</b><br><br>&nbsp; Таймер полива №1 </label>	
+                <br>
+                <input type="time" id="appt" title="Введите время включения полива" name="int1" min="20:00" max="23:00" value="20:10" step="600" required>&nbsp; &nbsp;				 
+                <input type="time" id="appt" title="Введите продолжительность полива" name="dur1_1" value="03:00" required>
+                <br>
+                <label for="time2">&nbsp; Таймер полива №2 </label> -
+		<br>
+	        <input type="time" id="appt" title="Введите время включения полива" name="int1" min="20:00" max="23:00" value="20:10" step="600" required>&nbsp; &nbsp;
+                <input type="time" id="appt" title="Введите продолжительность полива" name="dur2_1" value="02:00" required>
+		<br>
+		<label for="time3">&nbsp; Таймер полива №3 </label> 
+		<br>
+		<input type="time" id="appt" title="Введите время включения полива" name="time_input4" min="00:01" max="23:00" value="20:10" step="600" required>&nbsp; &nbsp;
+                <input type="time" id="appt" title="Введите продолжительность полива" name="time_input4_1" value="00:01" required>
+                https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/time -->
+                <br>
+                <br>
+                <label for="enable_arm_input">Авто</label>
+                <input type="checkbox" name="enable_arm_input" value="true" %ENABLE_ARM_INPUT%>
+                <input type="submit" value="Применить">
+		<div class="txt-top" style="top:400px; left:-10px;"><form action="http://192.168.11.68/update" method="get" target="_blank"><button type="submit">Обновление ПО</button></form></div>
+                </form>
+                </div>
                 
-                <div class="txt-top" style="top:155px; right:-190px;"><p class="description">ВЕРХНЯЯ</p><button id="button1" class="button"><span id="state1">%STATE1%</span></button></div>
-                <div class="txt-top" style="top:235px; right:-190px;"><p class="description">НИЖНЯЯ </p><button id="button2" class="button"><span id="state2">%STATE2%</span></button></div>
-                <div class="txt-top" style="top:315px; right:-190px;"><p class="description">ГРЯДКА-1</p><button id="button3" class="button"><span id="state3">%STATE3%</span></button></div>
-                <div class="txt-top" style="top:395px; right:-190px;"><p class="description">ГРЯДКА-2</p><button id="button4" class="button"><span id="state4">%STATE4%</span></button></div>
-                <div class="txt-top" style="top:475px; right:-190px;"><p class="description">ГРЯДКА-3</p><button id="button5" class="button"><span id="state5">%STATE5%</span></button></div>
-
-                <div class="txt-top" style="top:590px; left:-150px;"><form action="http://192.168.11.68/update" method="get" target="_blank"><button type="submit">Обновление ПО</button></form></div>
-             </div>
-        </div>
-    </div>
+		<div class="txt-right" style='top:120px; left:900px;'>
+                <div><p class="description">ВЕРХНЯЯ</p><button id="button1" class="button"><span id="state1">%STATE1%</span></button></div>
+                <div><p class="description">НИЖНЯЯ </p><button id="button2" class="button"><span id="state2">%STATE2%</span></button></div>
+                <div><p class="description">ГРЯДКА-1</p><button id="button3" class="button"><span id="state3">%STATE3%</span></button></div>
+                <div><p class="description">ГРЯДКА-2</p><button id="button4" class="button"><span id="state4">%STATE4%</span></button> </div>
+                <div><p class="description">ГРЯДКА-3</p><button id="button5" class="button"><span id="state5">%STATE5%</span></button></div>
+                </div>
+            </div>
+         </div>
     <script src="script.js"></script>
 </body>
+
 </html>
