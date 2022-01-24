@@ -1,6 +1,6 @@
 /*-------------------------------------- Фоновый градиент --------------------------------- */
 #gradient {
-/* -ms-filter: "progid:DXImageTransform.Microsoft.gradient (GradientType=0, startColorstr=#589afc, endColorstr=#f0f5fc)"; /* IE 8-9 */
+-ms-filter: "progid:DXImageTransform.Microsoft.gradient (GradientType=0, startColorstr=#589afc, endColorstr=#f0f5fc)"; /* IE 8-9 */
 background: -webkit-linear-gradient(to bottom, #589afc, #f0f5fc); /* Safari 5.1, iOS 5.0-6.1, Chrome 10-25, Android 4.0-4.3 */
 background: -moz-linear-gradient(to bottom, #589afc, #f0f5fc); /* Firefox 3.6-15 */
 background: -o-linear-gradient(to bottom, #589afc, #f0f5fc); /* Opera 11.1-12 */
@@ -33,9 +33,11 @@ p {
 	box-shadow: 0 10px 10px -10px #8c8b8b inset;
 }
 
-/*---------------- Позиционирование картинки и наложение на нее данных -------------------- */
+/*---------------- Главный блок -------------------- */
 .wrapper {width: 900px; max-width: 100%; height: 900px; max-height: 100%; }
 .wrapper {margin-left: auto; margin-right: auto; margin-top: auto; margin-bottom: auto;}
+
+/*---------------- Позиционирование картинки и наложение на нее данных -------------------- */
 .title{text-align: center;}
 .img-block{flex-grow: 1; display: flex; justify-content: center; align-items: center;}
 .img-block{max-width: 900px; position: relative;}   /* размер и позиционирование картинки*/
@@ -45,14 +47,14 @@ p {
 
 /*---------------- стиль кнопок «ON» и «OFF» -------------------- */
 .button {
-  padding: 5px 43px;             /*высота и ширина кнопки*/
-  font-size: 18px;               /*размер шрифта кнопки (размер кнопки адаптируется под размер шрифта)*/
-  text-align: center;            /*центровка надписи внутри кнопки*/
+  padding: 5px 43px;               /*высота и ширина кнопки*/
+  font-size: 18px;                 /*размер шрифта кнопки (размер кнопки адаптируется под размер шрифта)*/
+  text-align: center;              /*центровка надписи внутри кнопки*/
   outline: none;
-  color: #fff;                   /*цвет шрифта в кнопке*/
-  background-color: #c90411;     /*цвет кнопки*/
+  color: #fff;                     /*цвет шрифта в кнопке*/
+  background-color: #c90411;       /*цвет кнопки*/
   border: none;
-  border-radius: 5px;            /*радиус закругления углов кнопки*/
+  border-radius: 5px;              /*радиус закругления углов кнопки*/
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   -khtml-user-select: none;

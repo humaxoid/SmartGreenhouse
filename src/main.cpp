@@ -8,10 +8,10 @@
 #include <sensors.h>
 
 // Задаем сетевые настройки
-const char *ssid = "user_name";
-const char *password = "password";
-IPAddress local_IP(192, 168, 1, 68);  // Задаем статический IP-адрес: аналогичный адрес прописать в файле index.html
-IPAddress gateway(192, 168, 1, 102);  // Задаем IP-адрес сетевого шлюза:
+const char *ssid = "Satman_WLAN";
+const char *password = "9uthfim8";
+IPAddress local_IP(192, 168, 11, 68);  // Задаем статический IP-адрес: аналогичный адрес прописать в файле index.html
+IPAddress gateway(192, 168, 11, 102);  // Задаем IP-адрес сетевого шлюза:
 IPAddress subnet(255, 255, 255, 0);   // Задаем маску сети:
 IPAddress primaryDNS(8, 8, 8, 8);     // Основной ДНС (опционально)
 IPAddress secondaryDNS(8, 8, 4, 4);   // Резервный ДНС (опционально)
@@ -373,19 +373,22 @@ void loop()
     float IN4 = bme.readTemperature() - 1.04;
     // Serial.print(IN4);
     // Serial.println(" *C");
+	
+   // Верхняя форточка - порог открытия
+   if ((IN4 > defTemp1.toFloat() && !IN9) && Auto == "true" && !triggerActive1)
+// if (IN4 > defTemp1.toFloat() && Auto == "true" && !triggerActive1) // без датчика дождя.
+    {
+     ws.textAll(String(!ledState1)); // отправляем статус кнопки "ON"
+     String message = String("Верх - t° < порога. Текущая температура: ") + String(IN4) + String("C");
+     Serial.println(message);
+     triggerActive1 = true;
+     digitalWrite(ledPin1, HIGH);
+   }
 
-    // Верхняя форточка - порог открытия
-    if (IN4 > defTemp1.toFloat() && Auto == "true" && !triggerActive1)
-    {
-      ws.textAll(String(!ledState1)); // отправляем статус кнопки "ON"
-      String message = String("Верх - t° < порога. Текущая температура: ") + String(IN4) + String("C");
-      Serial.println(message);
-      triggerActive1 = true;
-      digitalWrite(ledPin1, HIGH);
-    }
     // Порог закрытия
-    if (IN4 < defTemp1_1.toFloat() && Auto == "true" && triggerActive1)
-    {
+	if ((IN4 < defTemp1_1.toFloat() && !IN9) && Auto == "true" && triggerActive1)
+//   if (IN4 < defTemp1_1.toFloat() && Auto == "true" && triggerActive1) // без датчика дождя.
+    { 
       ws.textAll(String(ledState1)); // отправляем статус кнопки "OFF"
       String message = String("Верх - t° < порога. Текущая температура: ") + String(IN4) + String("C");
       Serial.println(message);
