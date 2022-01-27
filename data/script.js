@@ -136,20 +136,21 @@ initWebSocket() через 2000 миллисекунд (2 секунды).*/
 хотим отобразить сообщение “ON” или “OFF” в абзаце, в котором отображается состояние. 
 Помните тот тег с идентификатором=”state”? Мы получим этот элемент и установим его значение в 
 положение ON или OFF.*/
-  function onMessage(event) { 
-    switch(event.data) {
-      case '0': document.getElementById("state1").innerHTML = "OFF";  document.getElementById('button1').style.backgroundColor = "#c90411"; document.getElementById("winimg").src = "https://www.w3schools.com/jsref/compman.gif"; break
-      case '1': document.getElementById("state1").innerHTML = " ON "; document.getElementById('button1').style.backgroundColor = "#04b50a"; document.getElementById("winimg").src = "https://www.w3schools.com/jsref/hackanm.gif"; break
+  function onMessage(event) {
+    switch(event.data)
+    {
+      case '0': document.getElementById("state1").innerHTML = "OFF";  document.getElementById('button1').style.backgroundColor = "#c90411"; document.getElementById("winimg").src = "https://kzpm.org/img/picture_main/down.gif"; break
+      case '1': document.getElementById("state1").innerHTML = "ON &nbsp;"; document.getElementById('button1').style.backgroundColor = "#04b50a"; document.getElementById("winimg").src = "https://kzpm.org/img/picture_main/up.gif"; break
       case '2': document.getElementById("state2").innerHTML = "OFF";  document.getElementById('button2').style.backgroundColor = "#c90411"; break
-      case '3': document.getElementById("state2").innerHTML = " ON "; document.getElementById('button2').style.backgroundColor = "#04b50a"; break
+      case '3': document.getElementById("state2").innerHTML = "ON &nbsp;"; document.getElementById('button2').style.backgroundColor = "#04b50a"; break
       case '4': document.getElementById("state3").innerHTML = "OFF";  document.getElementById('button3').style.backgroundColor = "#c90411"; break
-      case '5': document.getElementById("state3").innerHTML = " ON "; document.getElementById('button3').style.backgroundColor = "#04b50a"; break
+      case '5': document.getElementById("state3").innerHTML = "ON &nbsp;"; document.getElementById('button3').style.backgroundColor = "#04b50a"; break
 	  case '6': document.getElementById("state4").innerHTML = "OFF";  document.getElementById('button4').style.backgroundColor = "#c90411"; break
-      case '7': document.getElementById("state4").innerHTML = " ON "; document.getElementById('button4').style.backgroundColor = "#04b50a"; break
+      case '7': document.getElementById("state4").innerHTML = "ON &nbsp;"; document.getElementById('button4').style.backgroundColor = "#04b50a"; break
 	  case '8': document.getElementById("state5").innerHTML = "OFF";  document.getElementById('button5').style.backgroundColor = "#c90411"; break
-      case '9': document.getElementById("state5").innerHTML = " ON "; document.getElementById('button5').style.backgroundColor = "#04b50a"; break
+      case '9': document.getElementById("state5").innerHTML = "ON &nbsp;"; document.getElementById('button5').style.backgroundColor = "#04b50a"; break
     }
-    }
+  }
   
   function onLoad(event) {initWebSocket(); initButton();}
 
@@ -172,10 +173,10 @@ initWebSocket() через 2000 миллисекунд (2 секунды).*/
 
 // Отобразим картинку наличия дождя
 
-if ("/IN9" == true)
+if (document.getElementByID("IN4") > 23)
     {
-    document.getElementById("sun").src = "sungif.gif";
+    document.getElementById("wether").src = "sungif.gif";
 	}
     else{
-    document.getElementById("sun").src = "rain.gif";
+    document.getElementById("wether").src = "rain.gif";
     } 
