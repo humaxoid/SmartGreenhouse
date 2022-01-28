@@ -123,7 +123,7 @@ String getoutput_value()
 {
   output_value = analogRead(moisture_pin);
   output_value = map(output_value, 4090, 2900, 0, 100);   // Настроить, где: 4090=0% влажности, 2900=100% влажности.
-  uint8_t IN8 = (output_value);                           // Считывание данных и создание переменной с именем IN8
+  uint8_t IN8 = (output_value);                         // Считывание данных и создание переменной с именем IN8
   // Serial.print("Влажность почвы: ");
   // Serial.print(IN8);                                   // Вывод показаний в последовательный монитор порта
   // Serial.println("%");
@@ -133,16 +133,13 @@ String getoutput_value()
 
 // >>>>>>>>>>>>>> Датчик Soil Moisture Sensor (Датчик дождя) >>>>>>>>>>
 int moisture_pin2 = 39;        // Указываем номер аналогового пина
-uint8_t IN9 = (output_value);  // Считывание данных и создание переменной с именем IN9
+int output_value2;
 
 String getoutput_value2()
 {
   output_value = analogRead(moisture_pin2);
   output_value = map(output_value, 4090, 2900, 0, 100);   // Настроить, где: 4090=0% влажности, 2900=100% влажности.
-  // Serial.print("Влажность почвы: ");
-  // Serial.print(IN9);                                   // Вывод показаний в последовательный монитор порта
-  // Serial.println("%");
-  // Serial.println();
+  uint8_t IN9 = (output_value);
   return String(IN9);
 }
 

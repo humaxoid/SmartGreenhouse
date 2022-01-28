@@ -140,14 +140,14 @@ initWebSocket() через 2000 миллисекунд (2 секунды).*/
     switch(event.data)
     {
       case '0': document.getElementById("state1").innerHTML = "OFF";  document.getElementById('button1').style.backgroundColor = "#c90411"; document.getElementById("winimg").src = "https://kzpm.org/img/picture_main/down.gif"; break
-      case '1': document.getElementById("state1").innerHTML = "ON &nbsp;"; document.getElementById('button1').style.backgroundColor = "#04b50a"; document.getElementById("winimg").src = "https://kzpm.org/img/picture_main/up.gif"; break
+      case '1': document.getElementById("state1").innerHTML = "ON &nbsp;"; document.getElementById('button1').style.backgroundColor = "#04b50a"; document.getElementById("winimg").src = "https://kzpm.org/img/picture_main/up.gif"; break 
       case '2': document.getElementById("state2").innerHTML = "OFF";  document.getElementById('button2').style.backgroundColor = "#c90411"; break
       case '3': document.getElementById("state2").innerHTML = "ON &nbsp;"; document.getElementById('button2').style.backgroundColor = "#04b50a"; break
       case '4': document.getElementById("state3").innerHTML = "OFF";  document.getElementById('button3').style.backgroundColor = "#c90411"; break
       case '5': document.getElementById("state3").innerHTML = "ON &nbsp;"; document.getElementById('button3').style.backgroundColor = "#04b50a"; break
-	  case '6': document.getElementById("state4").innerHTML = "OFF";  document.getElementById('button4').style.backgroundColor = "#c90411"; break
+	    case '6': document.getElementById("state4").innerHTML = "OFF";  document.getElementById('button4').style.backgroundColor = "#c90411"; break
       case '7': document.getElementById("state4").innerHTML = "ON &nbsp;"; document.getElementById('button4').style.backgroundColor = "#04b50a"; break
-	  case '8': document.getElementById("state5").innerHTML = "OFF";  document.getElementById('button5').style.backgroundColor = "#c90411"; break
+	    case '8': document.getElementById("state5").innerHTML = "OFF";  document.getElementById('button5').style.backgroundColor = "#c90411"; break
       case '9': document.getElementById("state5").innerHTML = "ON &nbsp;"; document.getElementById('button5').style.backgroundColor = "#04b50a"; break
     }
   }
