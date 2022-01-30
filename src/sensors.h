@@ -128,7 +128,8 @@ String getoutput_value()
   // Serial.print(IN8);                                   // Вывод показаний в последовательный монитор порта
   // Serial.println("%");
   // Serial.println();
-  return String(IN8);
+ // return String(IN8);
+ return String(IN8);
 }
 
 // >>>>>>>>>>>>>> Датчик Soil Moisture Sensor (Датчик дождя) >>>>>>>>>>

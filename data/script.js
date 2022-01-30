@@ -1,6 +1,6 @@
 // ===================== Датчики ===============================
 
- setInterval(function() {
+    setInterval(function() {
         var xhttp = new XMLHttpRequest();
         xhttp.onreadystatechange = function() {
             if (this.readyState == 4 && this.status == 200) {
@@ -88,18 +88,6 @@
         xhttp.send();
     }, 5000);
 
-// Датчик наличия дождя	
-	    setInterval(function() {
-        var xhttp = new XMLHttpRequest();
-        xhttp.onreadystatechange = function() {
-            if (this.readyState == 4 && this.status == 200) {
-                document.getElementById("IN9").innerHTML = this.responseText;
-            }
-        };
-        xhttp.open("GET", "/IN9", true);
-        xhttp.send();
-    }, 5000);
-	
 // ======================== Кнопки =====================================
 
   var gateway = `ws://${window.location.hostname}/ws`; // Шлюз-это точка входа в интерфейс WebSocket, возвращает текущий адрес страницы (IP-адрес веб-сервера).
@@ -149,6 +137,8 @@ initWebSocket() через 2000 миллисекунд (2 секунды).*/
       case '7': document.getElementById("state4").innerHTML = "ON &nbsp;"; document.getElementById('button4').style.backgroundColor = "#04b50a"; break
 	    case '8': document.getElementById("state5").innerHTML = "OFF";  document.getElementById('button5').style.backgroundColor = "#c90411"; break
       case '9': document.getElementById("state5").innerHTML = "ON &nbsp;"; document.getElementById('button5').style.backgroundColor = "#04b50a"; break
+      case '10': document.getElementById("wether").src = "https://kzpm.org/img/picture_main/pic1.gif"; break
+      case '11': document.getElementById("wether").src = "https://kzpm.org/img/picture_main/pic2.gif"; break 
     }
   }
   
@@ -157,7 +147,7 @@ initWebSocket() через 2000 миллисекунд (2 секунды).*/
 /* Функция initButton() получает кнопку по ее идентификатору (button1) и добавляет прослушиватель 
 событий типа "click". Это означает, что при нажатии на кнопку вызывается функция переключения.*/
   function initButton() {
-    document.getElementById('button1').addEventListener('click', toggle1);
+  document.getElementById('button1').addEventListener('click', toggle1);
 	document.getElementById('button2').addEventListener('click', toggle2);
 	document.getElementById('button3').addEventListener('click', toggle3);
 	document.getElementById('button4').addEventListener('click', toggle4);
@@ -170,13 +160,3 @@ initWebSocket() через 2000 миллисекунд (2 секунды).*/
   function toggle3(){websocket.send('toggle3');}
   function toggle4(){websocket.send('toggle4');}
   function toggle5(){websocket.send('toggle5');}
-
-// Отобразим картинку наличия дождя
-
-if (document.getElementByID("IN4") > 23)
-    {
-    document.getElementById("wether").src = "sungif.gif";
-	}
-    else{
-    document.getElementById("wether").src = "rain.gif";
-    } 
