@@ -7,6 +7,64 @@ background: -o-linear-gradient(to bottom, #589afc, #f0f5fc); /* Opera 11.1-12 */
 background: linear-gradient(to bottom, #589afc, #f0f5fc); /* Opera 15+, Chrome 25+, IE 10+, Firefox 16+, Safari 6.1+, iOS 7+, Android 4.4+ */
 }
 
+/* -------------------- Шрифты ------------------- */
+
+#IN1 {
+  font-family: 'DSEG7 Modern Mini', monospace;
+  font-size: 1.35rem;
+  text-shadow: 0 1px 2px #000;
+  color: #2f2;
+}
+
+#IN2 {
+  font-family: 'DSEG7 Modern Mini', monospace;
+  font-size: 1.35rem;
+  text-shadow: 0 1px 2px #000;
+  color: #2f2;
+}
+
+#IN3 {
+  font-family: 'DSEG7 Modern Mini', monospace;
+  font-size: 1.35rem;
+  text-shadow: 0 1px 2px #000;
+  color: #2f2;
+}
+
+#IN4 {
+  font-family: 'DSEG7 Modern Mini', monospace;
+  font-size: 1.35rem;
+  text-shadow: 0 1px 2px #000;
+  color: #2f2;
+}
+
+#IN5 {
+  font-family: 'DSEG7 Modern Mini', monospace;
+  font-size: 1.35rem;
+  text-shadow: 0 1px 2px #000;
+  color: #2f2;
+}
+
+#IN6 {
+  font-family: 'DSEG7 Modern Mini', monospace;
+  font-size: 1.35rem;
+  text-shadow: 0 1px 2px #000;
+  color: #2f2;
+}
+
+#IN7 {
+  font-family: 'DSEG7 Modern Mini', monospace;
+  font-size: 1.35rem;
+  text-shadow: 0 1px 2px #000;
+  color: #2f2;
+}
+
+#IN8 {
+  font-family: 'DSEG7 Modern Mini', monospace;
+  font-size: 1.35rem;
+  text-shadow: 0 1px 2px #000;
+  color: #2f2;
+}
+
 /*------------ Позиционирование заголовка: Контрольная панель - "Умная теплица" ---------- */
 #home {                   /* размер иконки (домик) */
     width: 72px;          

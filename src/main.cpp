@@ -8,8 +8,8 @@
 #include <sensors.h>
 
 // Задаем сетевые настройки
-const char *ssid = "*******";
-const char *password = "*******";
+const char *ssid = "******";
+const char *password = "9uthfim8";
 IPAddress local_IP(192, 168, 1, 68); // Задаем статический IP-адрес: аналогичный адрес прописать в файле index.html
 IPAddress gateway(192, 168, 1, 102); // Задаем IP-адрес сетевого шлюза:
 IPAddress subnet(255, 255, 255, 0);   // Задаем маску сети:
@@ -443,27 +443,27 @@ void loop()
   {
     previousMillis = currentMillis;
     float IN4 = bme.readTemperature() - 1.04; // Назначим локальную переменную IN4, для датчика температуры.
-    uint8_t IN9 = (output_value);             // Назначим локальную переменную IN9, для датчика дождя.
+    uint8_t IN8 = (output_value);             // Назначим локальную переменную IN9, для датчика дождя.
     // Serial.print(IN4);
     // Serial.println(" *C");
 
-    // **************** Если пошел дождь, меняем анимацию на страничке ***********************
-    if ((IN9 > 100) && !triggerActive3)     // Если влажность на датчике дождя 100%, то
+    // Если пошел дождь, меняем анимацию на страничке.
+    if ((IN8 > 50) && !triggerActive3)
     {
-      ws.textAll(String(!ledState6 + 10));  // отправляем команду в javascript
-      // String message = String("Пошел дождь ") + String(IN9) + String("%");
+      ws.textAll(String(!ledState6 + 10));
+      // String message = String("Пошел дождь ") + String(IN8);
       // Serial.println(message);
       triggerActive3 = true;
     }
-    if ((IN9 < 100) && triggerActive3)
+    if ((IN8 < 50) && triggerActive3)
     {
       ws.textAll(String(ledState6 + 10));
-      // String message = String("Дождь кончился ") + String(IN9) + String("%");
+
+      // String message = String("Дождь кончился ") + String(IN8);
       // Serial.println(message);
       triggerActive3 = false;
     }
-   // ***************************************************************************************
-   
+
     // Верхняя форточка - порог открытия
     if ((IN4 > defTemp1.toFloat() && (IN8 < 50)) && Auto == "true" && !triggerActive1)
     {
