@@ -9,7 +9,7 @@
 
 // Задаем сетевые настройки
 const char *ssid = "******";
-const char *password = "9uthfim8";
+const char *password = "******";
 IPAddress local_IP(192, 168, 1, 68); // Задаем статический IP-адрес: аналогичный адрес прописать в файле index.html
 IPAddress gateway(192, 168, 1, 102); // Задаем IP-адрес сетевого шлюза:
 IPAddress subnet(255, 255, 255, 0);   // Задаем маску сети:
@@ -78,14 +78,6 @@ const char *PARAM_INPUT_flag = "enable_arm_input";
 unsigned long previousMillis = 0;
 const long interval = 5000;
 
-// Уведомляем клиентов о текущем состоянии светодиода
-void notifyClients1() { ws.textAll(String(ledState1)); }
-void notifyClients2() { ws.textAll(String(ledState2 + 2)); }
-void notifyClients3() { ws.textAll(String(ledState3 + 4)); }
-void notifyClients4() { ws.textAll(String(ledState4 + 6)); }
-void notifyClients5() { ws.textAll(String(ledState5 + 8)); }
-void notifyClients6() { ws.textAll(String(ledState6 + 10)); }
-
 /* функция обратного вызова, которая запускается всякий раз, когда мы получаем новые
   данные от клиентов по протоколу WebSocket. Если мы получаем сообщение “toggle”, мы
   переключаем значение переменной ledState. Кроме того, мы уведомляем всех клиентов,
@@ -95,33 +87,33 @@ void notifyClients6() { ws.textAll(String(ledState6 + 10)); }
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len)
 {
   AwsFrameInfo *info = (AwsFrameInfo *)arg;
-  if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT)
+  if ((info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) && Auto == "false")
   {
     data[len] = 0;
-    if (strcmp((char *)data, "toggle1") == 0)
+    if (strcmp((char *)data, "toggle1") == 0) // Слушаем сообщения от js, если toggle1 = 0, то выполняем код ниже.
     {
-      ledState1 = !ledState1;
-      notifyClients1();
+      ledState1 = !ledState1;        // Установим значение переменной ledState = 1, но если кнопка не нажата тогда ledState = 0
+      ws.textAll(String(ledState1)); // Уведомляем клиентов о переключении кнопки.
     }
     if (strcmp((char *)data, "toggle2") == 0)
     {
       ledState2 = !ledState2;
-      notifyClients2();
+      ws.textAll(String(ledState2 + 2));
     }
     if (strcmp((char *)data, "toggle3") == 0)
     {
       ledState3 = !ledState3;
-      notifyClients3();
+      ws.textAll(String(ledState3 + 4));
     }
     if (strcmp((char *)data, "toggle4") == 0)
     {
       ledState4 = !ledState4;
-      notifyClients4();
+      ws.textAll(String(ledState4 + 6));
     }
     if (strcmp((char *)data, "toggle5") == 0)
     {
       ledState5 = !ledState5;
-      notifyClients5();
+      ws.textAll(String(ledState5 + 8));
     }
   }
 }
