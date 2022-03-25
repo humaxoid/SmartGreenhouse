@@ -7,62 +7,87 @@ background: -o-linear-gradient(to bottom, #589afc, #f0f5fc); /* Opera 11.1-12 */
 background: linear-gradient(to bottom, #589afc, #f0f5fc); /* Opera 15+, Chrome 25+, IE 10+, Firefox 16+, Safari 6.1+, iOS 7+, Android 4.4+ */
 }
 
-/* -------------------- Шрифты ------------------- */
+/* ---------- Шрифты цифровых показателей ----------- */
+ @font-face {
+  font-family: 'seven-segment';
+  src: url("seven-segment.ttf") format("truetype")
+}
 
-#IN1 {
-  font-family: 'DSEG7 Modern Mini', monospace;
+#in_1 {
+  font-family: 'seven-segment', sans-serif;
   font-size: 1.35rem;
   text-shadow: 0 1px 2px #000;
   color: #2f2;
 }
 
-#IN2 {
-  font-family: 'DSEG7 Modern Mini', monospace;
+#in_2 {
+  font-family: 'seven-segment', sans-serif;
   font-size: 1.35rem;
   text-shadow: 0 1px 2px #000;
   color: #2f2;
 }
 
-#IN3 {
-  font-family: 'DSEG7 Modern Mini', monospace;
+#in_3 {
+  font-family: 'seven-segment', sans-serif;
   font-size: 1.35rem;
   text-shadow: 0 1px 2px #000;
   color: #2f2;
 }
 
-#IN4 {
-  font-family: 'DSEG7 Modern Mini', monospace;
+#in_4 {
+  font-family: 'seven-segment', sans-serif;
+  font-size: 1.35rem;
+  text-shadow: 0 1px 2px #000;
+  color: #2f2
+}
+
+#in_5 {
+  font-family: 'seven-segment', sans-serif;
   font-size: 1.35rem;
   text-shadow: 0 1px 2px #000;
   color: #2f2;
 }
 
-#IN5 {
-  font-family: 'DSEG7 Modern Mini', monospace;
+#in_6 {
+  font-family: 'seven-segment', sans-serif;
   font-size: 1.35rem;
   text-shadow: 0 1px 2px #000;
   color: #2f2;
 }
 
-#IN6 {
-  font-family: 'DSEG7 Modern Mini', monospace;
+#in_7 {
+  font-family: 'seven-segment', sans-serif;
   font-size: 1.35rem;
   text-shadow: 0 1px 2px #000;
   color: #2f2;
 }
 
-#IN7 {
-  font-family: 'DSEG7 Modern Mini', monospace;
+#in_8 {
+  font-family: 'seven-segment', sans-serif;
   font-size: 1.35rem;
   text-shadow: 0 1px 2px #000;
   color: #2f2;
 }
 
-#IN8 {
-  font-family: 'DSEG7 Modern Mini', monospace;
+#dateTime1 {
+  font-family: 'seven-segment', sans-serif;
   font-size: 1.35rem;
   text-shadow: 0 1px 2px #000;
-  color: #2f2;
+  color: rgb(62, 132, 224);
+}
+
+#dateTime2 {
+  font-family: 'seven-segment', sans-serif;
+  font-size: 1.35rem;
+  text-shadow: 0 1px 2px #000;
+  color: rgb(62, 132, 224);
+}
+
+#dateTime3 {
+  font-family: 'seven-segment', sans-serif;
+  font-size: 1.35rem;
+  text-shadow: 0 1px 2px #000;
+  color: rgb(62, 132, 224);
 }
 
 /*------------ Позиционирование заголовка: Контрольная панель - "Умная теплица" ---------- */
@@ -178,5 +203,5 @@ p {
 
  /*---------------- Окно ввода времени таймеров -------------------- */
  #appt {
-  width: 6em; /*Длинна окна
-}
+  width: 6em; /*Длинна окна */
+ }

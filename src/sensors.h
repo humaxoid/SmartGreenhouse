@@ -1,4 +1,5 @@
 // Файл конфигурации датчиков
+#include <Wire.h> // Библиотека взаимодействия с DS18B20, BH1750
 #include <DHT.h>
 #include <BH1750.h>
 #include <Adafruit_Sensor.h>
@@ -49,21 +50,23 @@ BH1750 lightMeter;
 String getLightLevel()
 {
   uint16_t IN3 = lightMeter.readLightLevel(); // Считывание данных и создание переменной с именем IN3
-                                           // Serial.print("Освещенность: ");                     // Вывод текста в монитор порта
-                                           // Serial.print(IN3);                                  // Вывод показаний в последовательный монитор порта
-                                           // Serial.println(" люкс");
+                                              // Serial.print("Освещенность: ");                     // Вывод текста в монитор порта
+                                              // Serial.print(IN3);                                  // Вывод показаний в последовательный монитор порта
+                                              // Serial.println(" люкс");
   return String(IN3);
 }
 
-// BME280 - Универсальный датчик
+// ================= BME280 - Универсальный датчик ==============
+//#define SEALEVELPRESSURE_HPA (1013.25)
 Adafruit_BME280 bme; // Подключаем датчик в режиме I2C
+unsigned long delayTime;
 
 String getTemperature2()
 {
   float IN4 = bme.readTemperature() - 1.04;
   // Serial.print("BME280- Температура: ");
-  // Serial.print(IN4);
-  // Serial.print(F(" °C "));
+  //  Serial.println(IN4);
+  //  Serial.println(F(" °C "));
   return String(IN4);
 }
 
@@ -85,7 +88,7 @@ String getHumidity()
   return String(IN6);
 }
 
-// DS18B20 - Датчик температуры почвы
+// ================ DS18B20 - Датчик температуры почвы ============
 OneWire ds(15); // Указываем номер пина.
 
 String gettemperature3()
@@ -122,48 +125,54 @@ int output_value;
 String getoutput_value()
 {
   output_value = analogRead(moisture_pin);
-  output_value = map(output_value, 4090, 2900, 0, 100);   // Настроить, где: 4090=0% влажности, 2900=100% влажности.
+  output_value = map(output_value, 4090, 2900, 0, 100); // Настроить, где: 4090=0% влажности, 2900=100% влажности.
   uint8_t IN8 = (output_value);                         // Считывание данных и создание переменной с именем IN8
-  // Serial.print("Влажность почвы: ");
-  // Serial.print(IN8);                                   // Вывод показаний в последовательный монитор порта
-  // Serial.println("%");
-  // Serial.println();
- // return String(IN8);
- return String(IN8);
+                                                        // Serial.print("Влажность почвы: ");
+                                                        // Serial.print(IN8);                                   // Вывод показаний в последовательный монитор порта
+                                                        // Serial.println("%");
+                                                        // Serial.println();
+  // return String(IN8);
+  return String(IN8);
 }
 
 // >>>>>>>>>>>>>> Датчик Soil Moisture Sensor (Датчик дождя) >>>>>>>>>>
-int moisture_pin2 = 39;        // Указываем номер аналогового пина
+int moisture_pin2 = 39; // Указываем номер аналогового пина
 int output_value2;
 
 String getoutput_value2()
 {
   output_value = analogRead(moisture_pin2);
-  output_value = map(output_value, 4090, 2900, 0, 100);   // Настроить, где: 4090=0% влажности, 2900=100% влажности.
+  output_value = map(output_value, 4090, 2900, 0, 100); // Настроить, где: 4090=0% влажности, 2900=100% влажности.
   uint8_t IN9 = (output_value);
   return String(IN9);
 }
 
-//<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-
-void setup_1()
+void initBME280()
 {
-  //DTH22
-  //Serial.println(F("запуск датчика DHT22..."));
-  dht.begin();
+  bool status;
+  status = bme.begin(0x76);
+  if (!status)
+  {
+    Serial.println("Не обнаружен датчик BME280, проверьте соединение");
+    while (1)
+      ;
+  }
+  delayTime = 1000; // Задержка для сериал монитора
+}
 
-  // Датчик BH1750
+void initDHT22()
+{
+  // Serial.println(F("запуск датчика DHT22..."));
+  dht.begin();
+}
+
+void initBH1750() {
   Wire.begin();
   lightMeter.begin();
   // Serial.println(F("запуск датчика BH1750..."));
+}
 
-  // Инициализация датчика BME280
-  if (!bme.begin(0x76))
-  {
-  // Serial.println("Не обнаружен датчик BME280, проверьте соединение");
-    while (1);
-  }
-
-  // Датчик Soil_Moisture_Sensor
-  Serial.println("запуск датчика влажности почвы... ");
+void loopSensors()
+{
+  delay(delayTime);
 }
