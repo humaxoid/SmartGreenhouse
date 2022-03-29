@@ -15,15 +15,14 @@ String getDHTTemperature()
 {
   float IN1 = dht.readTemperature(); // Считывание температуры и создание переменной с именем IN1
   if (isnan(IN1))
-  { // Проверяем, не удалось ли выполнить какое-либо чтение, после чего выходим раньше (чтобы повторить попытку).
-    // Serial.println("Ошибка чтения с датчика DTH22!");
-    return "--";
+  {
+    return "--"; // Проверяем, не удалось ли выполнить какое-либо чтение, после чего выходим раньше (чтобы повторить попытку).
   }
   else
   {
     // Serial.print("DTH22- Температура: ");
-    // Serial.print(IN1);                                 // Вывод температуры в последовательный монитор
-    // Serial.print(" °C ");                              // Вывод текста в монитор порта
+    // Serial.print(IN1);                    // Вывод температуры в последовательный монитор
+    // Serial.print(" °C ");                 // Вывод текста в монитор порта
     return String(IN1);
   }
 }
@@ -57,34 +56,25 @@ String getLightLevel()
 }
 
 // ================= BME280 - Универсальный датчик ==============
-//#define SEALEVELPRESSURE_HPA (1013.25)
+
 Adafruit_BME280 bme; // Подключаем датчик в режиме I2C
 unsigned long delayTime;
 
 String getTemperature2()
 {
-  float IN4 = bme.readTemperature() - 1.04;
-  // Serial.print("BME280- Температура: ");
-  //  Serial.println(IN4);
-  //  Serial.println(F(" °C "));
+ float IN4 = bme.readTemperature() - 1.04;
   return String(IN4);
 }
 
 String getPressure()
 {
   uint16_t IN5 = bme.readPressure() / 133.3;
-  // Serial.print(" Давление: ");
-  // Serial.print(IN5);
-  // Serial.print(" мм.рт.ст ");
   return String(IN5);
 }
 
 String getHumidity()
 {
   uint8_t IN6 = bme.readHumidity();
-  // Serial.print(" Влажность: ");
-  // Serial.print(IN6);
-  // Serial.println(" %");
   return String(IN6);
 }
 
@@ -112,9 +102,6 @@ String gettemperature3()
   float temperature = ((data[1] << 8) | data[0]) * 0.0625;
 
   uint8_t IN7 = ((temperature) + 2.3); // Считывание данных и создание переменной с именем IN7, поправочный коэффициент +2,3 гр.
-  // Serial.print("DS18B20- Температура почвы: ");           // Вывод текста в монитор порта
-  // Serial.print(IN7);                                      // Вывод показаний в последовательный монитор порта
-  // Serial.println(" °C");                                  // Вывод текста в монитор порта
   return String(IN7);
 }
 
@@ -127,15 +114,10 @@ String getoutput_value()
   output_value = analogRead(moisture_pin);
   output_value = map(output_value, 4090, 2900, 0, 100); // Настроить, где: 4090=0% влажности, 2900=100% влажности.
   uint8_t IN8 = (output_value);                         // Считывание данных и создание переменной с именем IN8
-                                                        // Serial.print("Влажность почвы: ");
-                                                        // Serial.print(IN8);                                   // Вывод показаний в последовательный монитор порта
-                                                        // Serial.println("%");
-                                                        // Serial.println();
-  // return String(IN8);
   return String(IN8);
 }
 
-// >>>>>>>>>>>>>> Датчик Soil Moisture Sensor (Датчик дождя) >>>>>>>>>>
+// Датчик Soil Moisture Sensor (Датчик дождя)
 int moisture_pin2 = 39; // Указываем номер аналогового пина
 int output_value2;
 
@@ -166,7 +148,8 @@ void initDHT22()
   dht.begin();
 }
 
-void initBH1750() {
+void initBH1750()
+{
   Wire.begin();
   lightMeter.begin();
   // Serial.println(F("запуск датчика BH1750..."));

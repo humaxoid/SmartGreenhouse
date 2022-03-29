@@ -90,17 +90,41 @@ var oneFunction = function () {
 		xhttp.send();
 	}, 5000);
 	
-// 	// Выводим остаток времени до срабатывания таймера №3
-// 	setInterval(function () {
-// 		var xhttp = new XMLHttpRequest();
-// 		xhttp.onreadystatechange = function () {
-// 			if (this.readyState == 4 && this.status == 200) {
-// 				document.getElementById("dateTime3").innerHTML = this.responseText; // Отправляем время в html
-// 			}
-// 		};
-// 		xhttp.open("GET", "/timeLeft3", true);   // Получаем данные о остатке времени до срабатывания таймера из скетча.
-// 		xhttp.send();
-// 	}, 1000);
+ // Выводим остаток времени до срабатывания таймера №1
+  setInterval(function () {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function () {
+      if (this.readyState == 4 && this.status == 200) {
+        document.getElementById("dateTime1").innerHTML = this.responseText; // Отправляем в html по id "dateTime1"
+      }
+    };
+    xhttp.open("GET", "/time_Left1", true);
+    xhttp.send();
+  }, 1000);
+  
+// Выводим остаток времени до срабатывания таймера №2
+    setInterval(function () {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function () {
+      if (this.readyState == 4 && this.status == 200) {
+        document.getElementById("dateTime2").innerHTML = this.responseText;
+      }
+    };
+    xhttp.open("GET", "/time_Left2", true);
+    xhttp.send();
+  }, 1000);
+  
+// Выводим остаток времени до срабатывания таймера №3
+    setInterval(function () {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function () {
+      if (this.readyState == 4 && this.status == 200) {
+        document.getElementById("dateTime3").innerHTML = this.responseText;
+      }
+    };
+    xhttp.open("GET", "/time_Left3", true);
+    xhttp.send();
+  }, 1000);
 	
  }
 

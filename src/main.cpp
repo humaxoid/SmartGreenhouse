@@ -13,10 +13,10 @@
 const char *ssid = "uname";
 const char *password = "pass";
 
-AsyncWebServer server(80);        // Запускаем асинхронный веб-сервер на 80 порту
-AsyncWebSocket ws("/ws");         // Создаём объект, который будет обрабатывать websocket-ы:
+AsyncWebServer server(80); // Запускаем асинхронный веб-сервер на 80 порту
+AsyncWebSocket ws("/ws");  // Создаём объект, который будет обрабатывать websocket-ы:
 
-uint32_t timer1, timer2, timer3; // Переменные хранения времени (unsigned long)
+ uint32_t timer1, timer2, timer3; // Переменные хранения времени (unsigned long)
 
 // На всех выводах GPIO по умолчанию устанавливаем 0.
 bool ledState1 = false, ledState2 = false, ledState3 = false, ledState4 = false, ledState5 = false, ledState6 = false;
@@ -72,7 +72,7 @@ const char *PARAM_INPUT_5_1 = "time_input5_1";
 const char *PARAM_INPUT_flag = "enable_arm_input";
 
 // Интервал между показаниями датчиков.
-unsigned long previousMillis = 0;
+uint32_t previousMillis = 0;
 const long interval = 5000;
 
 /* функция обратного вызова, которая запускается каждый раз, когда мы получаем новые
@@ -253,14 +253,36 @@ String processor(const String &var)
   return String();
 }
 
-//  // Обратный остсчет по таймерам
+String timeLeft1() // Отправляем остаток времени по таймеру №1
+{
+  uint32_t IN10 = (defTime3.toFloat() - (millis() / 3600000L - timer1));
+  if (ledState3) // если таймер включен
+  {
+    return "ON"; // отправить статус "ON"
+  }
+  return String(IN10);
+}
 
-// String timeLeft3() // Отправляем остаток времени по таймеру №3
-// {
-//   int8_t IN12 = (10 - (millis() / 1000L - timer3));
-//   if (ledState5)
-//   return String(IN12);
-// }
+String timeLeft2() // Отправляем остаток времени по таймеру №2
+{
+  uint32_t IN11 = (defTime4.toFloat() - (millis() / 3600000L - timer2));
+  if (ledState4)
+  {
+    return "ON";
+  }
+  return String(IN11);
+}
+
+String timeLeft3() // Отправляем остаток времени по таймеру №2
+{
+  uint32_t IN12 = (defTime5.toFloat() - (millis() / 3600000L - timer3));
+  if (ledState5)
+  {
+    return "ON";
+  }
+  return String(IN12);
+}
+
 
 // ----------------------------------------------------------------
 // Инициализация
@@ -340,13 +362,10 @@ void setup()
 
   setup_1(); // отсылка к void setup() файла ntp.h
 
-  //===== настроим сервер на прослушивание входящих GET-сообщений, и запустим его: ======
-
   // Маршрут до корневого каталога веб страницы
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send(SPIFFS, "/index.html", "text/html", false, processor); });
 
-  // Маршрут для загрузки файла style.css
   server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send(SPIFFS, "/style.css", "text/css"); });
 
@@ -390,8 +409,8 @@ void setup()
   server.on("/IN2", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send_P(200, "text/plain", getDHTHumidity().c_str()); });
 
-   server.on("/IN3", HTTP_GET, [](AsyncWebServerRequest *request)
-             { request->send_P(200, "text/plain", getLightLevel().c_str()); });
+  server.on("/IN3", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send_P(200, "text/plain", getLightLevel().c_str()); });
 
   server.on("/IN4", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send_P(200, "text/plain", getTemperature2().c_str()); });
@@ -408,10 +427,16 @@ void setup()
   server.on("/IN8", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send_P(200, "text/plain", getoutput_value().c_str()); });
 
-  //============= Отправляем остаток времени до включения таймеров =============
+  // //============= Отправляем остаток времени до включения таймеров =============
 
-  // server.on("/timeLeft3", HTTP_GET, [](AsyncWebServerRequest *request)
-  //           { request->send_P(200, "text/plain", timeLeft3().c_str()); });
+  server.on("/time_Left1", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send_P(200, "text/plain", timeLeft1().c_str()); });
+
+  server.on("/time_Left2", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send_P(200, "text/plain", timeLeft2().c_str()); });
+
+  server.on("/time_Left3", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send_P(200, "text/plain", timeLeft3().c_str()); });
 
   //===================== Реальное время с NTP сервера ========================
   //  server.on("/printLocalTime", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -570,8 +595,8 @@ void loop()
   //######### 3 #########
   if (millis() / 3600000L - timer3 >= (ledState5 ? defTime5_1.toFloat() : defTime5.toFloat()) && Auto == "true")
   {
-    ws.textAll(String(!ledState5 + 8)); // отправляем статус кнопки "ON"
-    timer3 = millis() / 3600000L;       // сброс таймера раз в час
+    ws.textAll(String(!ledState5 + 8));
+    timer3 = millis() / 3600000L;
     ledState5 = !ledState5;
     digitalWrite(ledPin5, ledState5);
   }

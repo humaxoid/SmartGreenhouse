@@ -2,9 +2,9 @@
 #gradient {
 -ms-filter: "progid:DXImageTransform.Microsoft.gradient (GradientType=0, startColorstr=#589afc, endColorstr=#f0f5fc)"; /* IE 8-9 */
 background: -webkit-linear-gradient(to bottom, #589afc, #f0f5fc); /* Safari 5.1, iOS 5.0-6.1, Chrome 10-25, Android 4.0-4.3 */
-background: -moz-linear-gradient(to bottom, #589afc, #f0f5fc); /* Firefox 3.6-15 */
-background: -o-linear-gradient(to bottom, #589afc, #f0f5fc); /* Opera 11.1-12 */
-background: linear-gradient(to bottom, #589afc, #f0f5fc); /* Opera 15+, Chrome 25+, IE 10+, Firefox 16+, Safari 6.1+, iOS 7+, Android 4.4+ */
+background: -moz-linear-gradient(to bottom, #589afc, #f0f5fc);    /* Firefox 3.6-15 */
+background: -o-linear-gradient(to bottom, #589afc, #f0f5fc);      /* Opera 11.1-12 */
+background: linear-gradient(to bottom, #589afc, #f0f5fc);         /* Opera 15+, Chrome 25+, IE 10+, Firefox 16+, Safari 6.1+, iOS 7+, Android 4.4+ */
 }
 
 /* ---------- Шрифты цифровых показателей ----------- */
@@ -15,42 +15,42 @@ background: linear-gradient(to bottom, #589afc, #f0f5fc); /* Opera 15+, Chrome 2
 
 #in_1 {
   font-family: 'seven-segment', sans-serif;
-  font-size: 1.35rem;
+  font-size: 2.10rem;
   text-shadow: 0 1px 2px #000;
   color: #2f2;
 }
 
 #in_2 {
   font-family: 'seven-segment', sans-serif;
-  font-size: 1.35rem;
+  font-size: 2.10rem;
   text-shadow: 0 1px 2px #000;
   color: #2f2;
 }
 
 #in_3 {
   font-family: 'seven-segment', sans-serif;
-  font-size: 1.35rem;
+  font-size: 2.10rem;
   text-shadow: 0 1px 2px #000;
   color: #2f2;
 }
 
 #in_4 {
   font-family: 'seven-segment', sans-serif;
-  font-size: 1.35rem;
+  font-size: 2.10rem;
   text-shadow: 0 1px 2px #000;
   color: #2f2
 }
 
 #in_5 {
   font-family: 'seven-segment', sans-serif;
-  font-size: 1.35rem;
+  font-size: 2.10rem;
   text-shadow: 0 1px 2px #000;
   color: #2f2;
 }
 
 #in_6 {
   font-family: 'seven-segment', sans-serif;
-  font-size: 1.35rem;
+  font-size: 2.10rem;
   text-shadow: 0 1px 2px #000;
   color: #2f2;
 }
@@ -73,21 +73,21 @@ background: linear-gradient(to bottom, #589afc, #f0f5fc); /* Opera 15+, Chrome 2
   font-family: 'seven-segment', sans-serif;
   font-size: 1.35rem;
   text-shadow: 0 1px 2px #000;
-  color: rgb(62, 132, 224);
+  color: rgb(12, 93, 199);
 }
 
 #dateTime2 {
   font-family: 'seven-segment', sans-serif;
   font-size: 1.35rem;
   text-shadow: 0 1px 2px #000;
-  color: rgb(62, 132, 224);
+  color: rgb(12, 93, 199);
 }
 
 #dateTime3 {
   font-family: 'seven-segment', sans-serif;
   font-size: 1.35rem;
   text-shadow: 0 1px 2px #000;
-  color: rgb(62, 132, 224);
+  color: rgb(12, 93, 199);
 }
 
 /*------------ Позиционирование заголовка: Контрольная панель - "Умная теплица" ---------- */
@@ -102,8 +102,8 @@ p {
 	
  h1 {	 
     text-align: center;          /* центровка заголовка */
-	font-size: 40px;             /* размер шрифта заголовка */
-	text-shadow: 3px 2px gray;   /* тень */
+	font-size: 40px;               /* размер шрифта заголовка */
+	text-shadow: 3px 2px rgb(99, 98, 98);   /* тень */
 }
 
 /* -------------- Линия----------------*/
@@ -121,12 +121,13 @@ p {
 .wrapper {margin-left: auto; margin-right: auto; margin-top: auto; margin-bottom: auto;}
 
 /*---------------- Позиционирование картинки и наложение на нее данных -------------------- */
-.title{text-align: center;}
-.img-block{flex-grow: 1; display: flex; justify-content: center; align-items: center;}
-.img-block{max-width: 900px; position: relative;}   /* размер и позиционирование картинки*/
-.img-block img{max-width: 100%;} 
-.txt-top, .txt-bottom{position: absolute;}          /* позиционирование текста*/
-.txt-top {top: font-size 1.3em; color:red}          /* отступ слева и сверху для верхней надписи*/
+.title {text-align: center;}
+.img-block {flex-grow: 1; display: flex; justify-content: center; align-items: center;}
+.img-block {max-width: 900px; position: relative;}      /* размер и позиционирование картинки*/
+.img-block img {max-width: 100%;} 
+.txt-top, .txt-bottom {position: absolute;}             /* позиционирование текста*/
+.txt-top {font-size: 1.15em; color: rgb(255, 0, 0);}  /* отступ слева и сверху для верхней надписи*/
+.ota {font-size: 1.05em; color: rgb(16, 67, 235);}    /* отступ слева и сверху для верхней надписи*/
 
 /*---------------- стиль кнопок «ON» и «OFF» -------------------- */
 .button {
@@ -134,8 +135,8 @@ p {
   font-size: 18px;                 /*размер шрифта кнопки (размер кнопки адаптируется под размер шрифта)*/
   text-align: center;              /*центровка надписи внутри кнопки*/
   outline: none;
-  color: #fff;                     /*цвет шрифта в кнопке*/
-  background-color: #c90411;       /*цвет кнопки*/
+  color: #fff;                   /*цвет шрифта в кнопке*/
+  background-color: #c90411;     /*цвет кнопки*/
   border: none;
   border-radius: 5px;              /*радиус закругления углов кнопки*/
   -webkit-touch-callout: none;
