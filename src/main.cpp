@@ -6,7 +6,7 @@
 #include <AsyncElegantOTA.h>
 
 #include <sensors.h>
-#include <ntp.h>
+//#include <ntp.h>
 
 // Задаем сетевые настройки
 
@@ -16,7 +16,7 @@ const char *password = "pass";
 AsyncWebServer server(80); // Запускаем асинхронный веб-сервер на 80 порту
 AsyncWebSocket ws("/ws");  // Создаём объект, который будет обрабатывать websocket-ы:
 
- uint32_t timer1, timer2, timer3; // Переменные хранения времени (unsigned long)
+uint32_t timer1, timer2, timer3; // Переменные хранения времени (unsigned long)
 
 // На всех выводах GPIO по умолчанию устанавливаем 0.
 bool ledState1 = false, ledState2 = false, ledState3 = false, ledState4 = false, ledState5 = false, ledState6 = false;
@@ -253,36 +253,58 @@ String processor(const String &var)
   return String();
 }
 
+// =========== Конертируем время ================
+
 String timeLeft1() // Отправляем остаток времени по таймеру №1
 {
-  uint32_t IN10 = (defTime3.toFloat() - (millis() / 3600000L - timer1));
+  uint32_t sec = defTime3.toFloat() * 3600ul - millis() / 1000ul; // остаток в секундах
+  uint32_t H = (sec / 3600ul);                                    // часы
+  uint32_t M = (sec % 3600ul) / 60ul;                             // минуты
+  uint32_t S = (sec % 3600ul) % 60ul;                             // секунды
+
+  char szStr[9];
+  sprintf(szStr, "%02d:%02d:%02d", H, M, S);
+  Serial.println(szStr);
   if (ledState3) // если таймер включен
   {
     return "ON"; // отправить статус "ON"
   }
-  return String(IN10);
+  return String(szStr);
 }
 
 String timeLeft2() // Отправляем остаток времени по таймеру №2
 {
-  uint32_t IN11 = (defTime4.toFloat() - (millis() / 3600000L - timer2));
-  if (ledState4)
+  uint32_t sec = defTime4.toFloat() * 3600ul - millis() / 1000ul; // остаток в секундах
+  uint32_t H = (sec / 3600ul);                                    // часы
+  uint32_t M = (sec % 3600ul) / 60ul;                             // минуты
+  uint32_t S = (sec % 3600ul) % 60ul;                             // секунды
+
+  char szStr[9];
+  sprintf(szStr, "%02d:%02d:%02d", H, M, S);
+
+  if (ledState4) // если таймер включен
   {
-    return "ON";
+    return "ON"; // отправить статус "ON"
   }
-  return String(IN11);
+  return String(szStr);
 }
 
 String timeLeft3() // Отправляем остаток времени по таймеру №2
 {
-  uint32_t IN12 = (defTime5.toFloat() - (millis() / 3600000L - timer3));
-  if (ledState5)
-  {
-    return "ON";
-  }
-  return String(IN12);
-}
+  uint32_t sec = defTime5.toFloat() * 3600ul - millis() / 1000ul; // остаток в секундах
+  uint32_t H = (sec / 3600ul);                                    // часы
+  uint32_t M = (sec % 3600ul) / 60ul;                             // минуты
+  uint32_t S = (sec % 3600ul) % 60ul;                             // секунды
 
+  char szStr[9];
+  sprintf(szStr, "%02d:%02d:%02d", H, M, S);
+
+  if (ledState5) // если таймер включен
+  {
+    return "ON"; // отправить статус "ON"
+  }
+  return String(szStr);
+}
 
 // ----------------------------------------------------------------
 // Инициализация
@@ -337,30 +359,24 @@ void setup()
   Serial.begin(115200);
   delay(1000);
 
-  initDHT22();      // Инициализация датчика HDT22, в файле sensors.h
-  initBH1750();     // Инициализация датчика BH1750, в файле sensors.h
-  initBME280();     // Инициализация датчика BME280, в файле sensors.h
-  initSPIFFS();     // Инициализация SPIFFS
-  initWiFi();       // Инициализация WiFi
-  initWebServer();  // Инициализация Web сервера
-  initWebSocket();  // Инициализация Websocket
-  printLocalTime(); // Инициализация ntp клиента
+  initDHT22(); // Инициализация датчика HDT22, в файле sensors.h
+  // initBH1750();     // Инициализация датчика BH1750, в файле sensors.h
+  initBME280();    // Инициализация датчика BME280, в файле sensors.h
+  initSPIFFS();    // Инициализация SPIFFS
+  initWiFi();      // Инициализация WiFi
+  initWebServer(); // Инициализация Web сервера
+  initWebSocket(); // Инициализация Websocket
+  // printLocalTime(); // Инициализация ntp клиента
 
   // Объявим GPIO выходы (по умолчанию LOW)
-  pinMode(ledPin1, OUTPUT);
-  digitalWrite(ledPin1, LOW);
-  pinMode(ledPin2, OUTPUT);
-  digitalWrite(ledPin2, LOW);
-  pinMode(ledPin3, OUTPUT);
-  digitalWrite(ledPin3, LOW);
-  pinMode(ledPin4, OUTPUT);
-  digitalWrite(ledPin4, LOW);
-  pinMode(ledPin5, OUTPUT);
-  digitalWrite(ledPin5, LOW);
-  pinMode(ledPin6, OUTPUT);
-  digitalWrite(ledPin6, HIGH); // Вывод светодиодного индикатора режимов Авто/Ручной.
+  pinMode(ledPin1, OUTPUT); digitalWrite(ledPin1, LOW);
+  pinMode(ledPin2, OUTPUT); digitalWrite(ledPin2, LOW);
+  pinMode(ledPin3, OUTPUT); digitalWrite(ledPin3, LOW);
+  pinMode(ledPin4, OUTPUT); digitalWrite(ledPin4, LOW);
+  pinMode(ledPin5, OUTPUT); digitalWrite(ledPin5, LOW);
+  pinMode(ledPin6, OUTPUT); digitalWrite(ledPin6, HIGH); // Вывод светодиодного индикатора режимов Авто/Ручной.
 
-  setup_1(); // отсылка к void setup() файла ntp.h
+  // setup_1(); // отсылка к void setup() файла ntp.h
 
   // Маршрут до корневого каталога веб страницы
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -409,8 +425,8 @@ void setup()
   server.on("/IN2", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send_P(200, "text/plain", getDHTHumidity().c_str()); });
 
-  server.on("/IN3", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send_P(200, "text/plain", getLightLevel().c_str()); });
+  // server.on("/IN3", HTTP_GET, [](AsyncWebServerRequest *request)
+  //           { request->send_P(200, "text/plain", getLightLevel().c_str()); });
 
   server.on("/IN4", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send_P(200, "text/plain", getTemperature2().c_str()); });
@@ -430,13 +446,13 @@ void setup()
   // //============= Отправляем остаток времени до включения таймеров =============
 
   server.on("/time_Left1", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send_P(200, "text/plain", timeLeft1().c_str()); });
+            { request->send(200, "text/plain", timeLeft1().c_str()); });
 
   server.on("/time_Left2", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send_P(200, "text/plain", timeLeft2().c_str()); });
+            { request->send(200, "text/plain", timeLeft2().c_str()); });
 
   server.on("/time_Left3", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send_P(200, "text/plain", timeLeft3().c_str()); });
+            { request->send(200, "text/plain", timeLeft3().c_str()); });
 
   //===================== Реальное время с NTP сервера ========================
   //  server.on("/printLocalTime", HTTP_GET, [](AsyncWebServerRequest *request)
@@ -457,7 +473,7 @@ void setup()
                 defTemp1_1 = request->getParam(PARAM_INPUT_1_1)->value(); // Верхняя форточка, нижний порог t°.
                 defTemp2 = request->getParam(PARAM_INPUT_2)->value();     // Нижняя форточка, нижний порог t°.
                 defTemp2_1 = request->getParam(PARAM_INPUT_2_1)->value(); // Нижняя форточка, нижний порог t°.
-                defTime3 = request->getParam(PARAM_INPUT_3)->value();     // Таймер 1
+                defTime3 = request ->getParam(PARAM_INPUT_3)->value();     // Таймер 1
                 defTime3_1 = request->getParam(PARAM_INPUT_3_1)->value();
                 defTime4 = request->getParam(PARAM_INPUT_4)->value();     // Таймер 2
                 defTime4_1 = request->getParam(PARAM_INPUT_4_1)->value();
@@ -507,13 +523,8 @@ void loop()
     previousMillis = currentMillis;
     float IN4 = bme.readTemperature() - 1.04; // Назначим локальную переменную IN4, для датчика температуры.
     uint8_t IN8 = (output_value);             // Назначим локальную переменную IN9, для датчика дождя.
-                                              //  Serial.print(IN4);
-                                              //  Serial.println(" *C");
-    // или так
-    // globalClient->text(String(IN4));
-
-    // String randomNumber = String (random(0, 20));
-    // globalClient->text(randomNumber);
+    //  Serial.print(IN4);
+    //  Serial.println(" *C");
 
     // Если пошел дождь, меняем анимацию на страничке.
     if ((IN8 > 50) && !triggerActive3)
@@ -600,21 +611,4 @@ void loop()
     ledState5 = !ledState5;
     digitalWrite(ledPin5, ledState5);
   }
-
-  // ########################### Тут раздел для всяких тестов #################################
-  // if (millis() / 1000L - timer3 >= (ledState5 ? 3 : 10)) // 13 сек. периодичность
-  // {
-  //   timer3 = millis() / 1000L;        // количество секунд с момента старта
-  //   ledState5 = !ledState5;           //
-  //   digitalWrite(ledPin5, ledState5); // Подаем на GPIO27, высокий/низкий уровень
-  //   // Serial.println(timer3);        // Выводим количество секунд с момента включения
-  // }
-
-  // int8_t timeleft3 = (defTime4.toFloat() - (millis() / 1000L - timer3));
-  // int8_t timeleft3 = (10 - (millis() / 1000L - timer3)); // Создаем переменную timeleft3, обратного остчета времени (где 10, это период)
-  // if (!ledState5)                                        // если таймер выключен (период ожидания)
-  // {
-  // Serial.println(timeleft3);                             // то выводим обратный остчет до включения таймера
-  // ws.textAll(String(timeleft3));                         // отправляем в javaScript
-  // }
 }
