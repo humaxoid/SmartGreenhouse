@@ -10,8 +10,8 @@
 
 // Задаем сетевые настройки
 
-const char *ssid = "uname";
-const char *password = "pass";
+const char *ssid = "ROSTELECOM_2B7B";
+const char *password = "D7A3E64A";
 
 AsyncWebServer server(80); // Запускаем асинхронный веб-сервер на 80 порту
 AsyncWebSocket ws("/ws");  // Создаём объект, который будет обрабатывать websocket-ы:
@@ -39,7 +39,7 @@ String defTime3 = "8";   // Периодичность включения тай
 String defTime3_1 = "4"; // Длительность работы таймера по умолчанию
 String defTime4 = "9";
 String defTime4_1 = "3";
-String defTime5 = "10"; // Периодичность включения таймера по умолчанию (в часах)
+String defTime5 = "10";  // Периодичность включения таймера по умолчанию (в часах)
 String defTime5_1 = "2";
 
 String Flag = "checked"; // Переменная "Flag" сообщает нам, установлен ли флажок режима "Авто" или нет.
@@ -258,9 +258,9 @@ String processor(const String &var)
 String timeLeft1() // Отправляем остаток времени по таймеру №1
 {
   uint32_t sec = defTime3.toFloat() * 3600ul - millis() / 1000ul; // остаток в секундах
-  uint32_t H = (sec / 3600ul);                                    // часы
-  uint32_t M = (sec % 3600ul) / 60ul;                             // минуты
-  uint32_t S = (sec % 3600ul) % 60ul;                             // секунды
+  uint8_t H = (sec / 3600);                                       // часы
+  uint8_t M = (sec % 3600) / 60;                                  // минуты
+  uint8_t S = (sec % 3600) % 60;                                  // секунды
 
   char szStr[9];
   sprintf(szStr, "%02d:%02d:%02d", H, M, S);
@@ -275,9 +275,9 @@ String timeLeft1() // Отправляем остаток времени по т
 String timeLeft2() // Отправляем остаток времени по таймеру №2
 {
   uint32_t sec = defTime4.toFloat() * 3600ul - millis() / 1000ul; // остаток в секундах
-  uint32_t H = (sec / 3600ul);                                    // часы
-  uint32_t M = (sec % 3600ul) / 60ul;                             // минуты
-  uint32_t S = (sec % 3600ul) % 60ul;                             // секунды
+  uint8_t H = (sec / 3600);                                       // часы
+  uint8_t M = (sec % 3600) / 60;                                  // минуты
+  uint8_t S = (sec % 3600) % 60;                                  // секунды
 
   char szStr[9];
   sprintf(szStr, "%02d:%02d:%02d", H, M, S);
@@ -289,12 +289,12 @@ String timeLeft2() // Отправляем остаток времени по т
   return String(szStr);
 }
 
-String timeLeft3() // Отправляем остаток времени по таймеру №2
+String timeLeft3() // Отправляем остаток времени по таймеру №3
 {
   uint32_t sec = defTime5.toFloat() * 3600ul - millis() / 1000ul; // остаток в секундах
-  uint32_t H = (sec / 3600ul);                                    // часы
-  uint32_t M = (sec % 3600ul) / 60ul;                             // минуты
-  uint32_t S = (sec % 3600ul) % 60ul;                             // секунды
+  uint8_t H = (sec / 3600);                                       // часы
+  uint8_t M = (sec % 3600) / 60;                                  // минуты
+  uint8_t S = (sec % 3600) % 60;                                  // секунды
 
   char szStr[9];
   sprintf(szStr, "%02d:%02d:%02d", H, M, S);
@@ -505,16 +505,11 @@ void loop()
   loopSensors(); // запуск loop в файле sensors.h
 
   // Проверяем, если галка снята (ручной режим), то
-  if (Auto == "false")
-    digitalWrite(ledPin1, ledState1);
-  if (Auto == "false")
-    digitalWrite(ledPin2, ledState2);
-  if (Auto == "false")
-    digitalWrite(ledPin3, ledState3);
-  if (Auto == "false")
-    digitalWrite(ledPin4, ledState4);
-  if (Auto == "false")
-    digitalWrite(ledPin5, ledState5);
+  if (Auto == "false") digitalWrite(ledPin1, ledState1);
+  if (Auto == "false") digitalWrite(ledPin2, ledState2);
+  if (Auto == "false") digitalWrite(ledPin3, ledState3);
+  if (Auto == "false") digitalWrite(ledPin4, ledState4);
+  if (Auto == "false") digitalWrite(ledPin5, ledState5);
 
   // Считываем с датчика показания температуры каждые 5 секунд.
   uint32_t currentMillis = millis();
@@ -523,8 +518,8 @@ void loop()
     previousMillis = currentMillis;
     float IN4 = bme.readTemperature() - 1.04; // Назначим локальную переменную IN4, для датчика температуры.
     uint8_t IN8 = (output_value);             // Назначим локальную переменную IN9, для датчика дождя.
-    //  Serial.print(IN4);
-    //  Serial.println(" *C");
+    // Serial.print(IN4);
+    // Serial.println(" *C");
 
     // Если пошел дождь, меняем анимацию на страничке.
     if ((IN8 > 50) && !triggerActive3)
@@ -591,7 +586,7 @@ void loop()
     ws.textAll(String(!ledState3 + 4)); // отправляем статус кнопки "ON"
     timer1 = millis() / 3600000L;       // количество секунд с момента старта
     ledState3 = !ledState3;
-    digitalWrite(ledPin3, ledState3); // подаем на GPIO25, высокий/низкий уровень
+    digitalWrite(ledPin3, ledState3);   // подаем на GPIO25, высокий/низкий уровень
   }
 
   // ######## 2 #########
