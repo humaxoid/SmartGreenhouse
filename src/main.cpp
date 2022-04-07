@@ -10,8 +10,8 @@
 
 // Задаем сетевые настройки
 
-const char *ssid = "ROSTELECOM_2B7B";
-const char *password = "D7A3E64A";
+const char *ssid = "uname";
+const char *password = "pass";
 
 AsyncWebServer server(80); // Запускаем асинхронный веб-сервер на 80 порту
 AsyncWebSocket ws("/ws");  // Создаём объект, который будет обрабатывать websocket-ы:
