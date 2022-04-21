@@ -88,42 +88,6 @@ setInterval(function () {
 	xhttp.send();
 }, 5000);
 
-// Выводим остаток времени до срабатывания таймера №1
-setInterval(function () {
-	var xhttp = new XMLHttpRequest();
-	xhttp.onreadystatechange = function () {
-		if (this.readyState == 4 && this.status == 200) {
-			document.getElementById("time1").innerHTML = this.responseText; // Отправляем в html по id "dateTime1"
-		}
-	};
-	xhttp.open("GET", "/time_Left1", true);
-	xhttp.send();
-}, 1000);
-
-// Выводим остаток времени до срабатывания таймера №2
-setInterval(function () {
-	var xhttp = new XMLHttpRequest();
-	xhttp.onreadystatechange = function () {
-		if (this.readyState == 4 && this.status == 200) {
-			document.getElementById("time2").innerHTML = this.responseText; // Отправляем в html по id "dateTime1"
-		}
-	};
-	xhttp.open("GET", "/time_Left2", true);
-	xhttp.send();
-}, 1000);
-
-// Выводим остаток времени до срабатывания таймера №3
-setInterval(function () {
-	var xhttp = new XMLHttpRequest();
-	xhttp.onreadystatechange = function () {
-		if (this.readyState == 4 && this.status == 200) {
-			document.getElementById("time3").innerHTML = this.responseText; // Отправляем в html по id "dateTime1"
-		}
-	};
-	xhttp.open("GET", "/time_Left3", true);
-	xhttp.send();
-}, 1000);
-
 // ======================== Кнопки =====================================
 
 var gateway = `ws://${window.location.hostname}/ws`; // Шлюз-это точка входа в интерфейс WebSocket, возвращает текущий адрес страницы (IP-адрес веб-сервера).
@@ -142,7 +106,7 @@ function initWebSocket() {
 	websocket.onmessage = onMessage;
 }
 
-// Событие OnOpen определяет, что новый клиент запросил доступ и выполняет первоначальное приветсвие
+// Событие OnOpen определяет, что новый клиент запросил доступ и выполняет первоначальное приветствие
 
 function onOpen(event) {
 	console.log('Соединение открыто');
@@ -160,21 +124,36 @@ function onClose(event) {
 	Когда найден оператор case, значение которого равно значению переменной, выполняется программный код в 
 	этом операторе. document.getElementById("***") это поиск в HTML по id="***", после изменяем содержимое элемента 
 	с помощью innerHTML на текущие показания (маркировка кнопок ON или OFF, картинок, даты и времени и др. */
-
 function onMessage(event) {
-	switch (event.data) {
-		case '0': document.getElementById("state1").innerHTML = "OFF"; document.getElementById('button1').style.backgroundColor = "#c90411"; document.getElementById("winimg").src = "https://kzpm.org/img/picture_main/down.gif"; break
-		case '1': document.getElementById("state1").innerHTML = "ON &nbsp;"; document.getElementById('button1').style.backgroundColor = "#04b50a"; document.getElementById("winimg").src = "https://kzpm.org/img/picture_main/up.gif"; break
-		case '2': document.getElementById("state2").innerHTML = "OFF"; document.getElementById('button2').style.backgroundColor = "#c90411"; break
-		case '3': document.getElementById("state2").innerHTML = "ON &nbsp;"; document.getElementById('button2').style.backgroundColor = "#04b50a"; break
-		case '4': document.getElementById("state3").innerHTML = "OFF"; document.getElementById('button3').style.backgroundColor = "#c90411"; break
-		case '5': document.getElementById("state3").innerHTML = "ON &nbsp;"; document.getElementById('button3').style.backgroundColor = "#04b50a"; break
-		case '6': document.getElementById("state4").innerHTML = "OFF"; document.getElementById('button4').style.backgroundColor = "#c90411"; break
-		case '7': document.getElementById("state4").innerHTML = "ON &nbsp;"; document.getElementById('button4').style.backgroundColor = "#04b50a"; break
-		case '8': document.getElementById("state5").innerHTML = "OFF"; document.getElementById('button5').style.backgroundColor = "#c90411"; break
-		case '9': document.getElementById("state5").innerHTML = "ON &nbsp;"; document.getElementById('button5').style.backgroundColor = "#04b50a"; break
-		case '10': document.getElementById("wether").src = "https://kzpm.org/img/picture_main/pic1.gif"; break
-		case '11': document.getElementById("wether").src = "https://kzpm.org/img/picture_main/pic2.gif"; break
+	var arrayS = event.data.split("=");
+	switch (arrayS[0]) {
+		case 'buffer1': document.getElementById("time1").innerHTML = arrayS[1]; break
+		case 'buffer2': document.getElementById("time2").innerHTML = arrayS[1]; break
+		case 'buffer3': document.getElementById("time3").innerHTML = arrayS[1]; break
+		case '0': document.getElementById("state1").innerHTML = "OFF"; 
+		          document.getElementById('button1').style.backgroundColor = "#c90411"; 
+		          document.getElementById("winimg").src = "https://kzpm.org/img/picture_main/down.gif" = arrayS[1]; break	    
+		case '1': document.getElementById("state1").innerHTML = "ON &nbsp;"; 
+		          document.getElementById('button1').style.backgroundColor = "#04b50a"; 
+		          document.getElementById("winimg").src = "https://kzpm.org/img/picture_main/up.gif" = arrayS[1]; break
+		case '2': document.getElementById("state2").innerHTML = "OFF";
+		          document.getElementById('button2').style.backgroundColor = "#c90411" = arrayS[1]; break
+		case '3': document.getElementById("state2").innerHTML = "ON &nbsp;"; 
+		          document.getElementById('button2').style.backgroundColor = "#04b50a" = arrayS[1]; break
+		case '4': document.getElementById("state3").innerHTML = "OFF"; 
+		          document.getElementById('button3').style.backgroundColor = "#c90411" = arrayS[1]; break
+		case '5': document.getElementById("state3").innerHTML = "ON &nbsp;"; 
+		          document.getElementById('button3').style.backgroundColor = "#04b50a" = arrayS[1]; break
+		case '6': document.getElementById("state4").innerHTML = "OFF"; 
+		          document.getElementById('button4').style.backgroundColor = "#c90411" = arrayS[1]; break
+		case '7': document.getElementById("state4").innerHTML = "ON &nbsp;"; 
+		          document.getElementById('button4').style.backgroundColor = "#04b50a" = arrayS[1]; break
+		case '8': document.getElementById("state5").innerHTML = "OFF"; 
+		          document.getElementById('button5').style.backgroundColor = "#c90411" = arrayS[1]; break
+		case '9': document.getElementById("state5").innerHTML = "ON &nbsp;"; 
+		          document.getElementById('button5').style.backgroundColor = "#04b50a" = arrayS[1]; break
+		case '10': document.getElementById("wether").src = "https://kzpm.org/img/picture_main/pic1.gif" = arrayS[1]; break
+		case '11': document.getElementById("wether").src = "https://kzpm.org/img/picture_main/pic2.gif" = arrayS[1]; break
 	}
 }
 
