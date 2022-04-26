@@ -1,10 +1,13 @@
 /*-------------------------------------- Фоновый градиент --------------------------------- */
 #gradient {
--ms-filter: "progid:DXImageTransform.Microsoft.gradient (GradientType=0, startColorstr=#589afc, endColorstr=#f0f5fc)"; /* IE 8-9 */
 background: -webkit-linear-gradient(to bottom, #589afc, #f0f5fc); /* Safari 5.1, iOS 5.0-6.1, Chrome 10-25, Android 4.0-4.3 */
 background: -moz-linear-gradient(to bottom, #589afc, #f0f5fc);    /* Firefox 3.6-15 */
 background: -o-linear-gradient(to bottom, #589afc, #f0f5fc);      /* Opera 11.1-12 */
 background: linear-gradient(to bottom, #589afc, #f0f5fc);         /* Opera 15+, Chrome 25+, IE 10+, Firefox 16+, Safari 6.1+, iOS 7+, Android 4.4+ */
+background-attachment: fixed;         /* Фон страницы фиксируется */
+background-repeat: no-repeat;         /* изображение  не повторяется */
+background-size: 100%;                /* растянуть фоновое изображение на весь размер окна браузера */
+background-position: center;          /* позиционируем по центру */
 }
 
 /* ---------- Шрифты цифровых показателей ----------- */

@@ -27,8 +27,8 @@ bool ledState1 = false, ledState2 = false, ledState3 = false, ledState4 = false,
 #define ledPin6 2  // Вывод на светодиод режима Авто/Ручной.
 
 String defTemp1 = "25.0";   // Верхнее пороговое значение температуры по умолчанию
-String defTemp1_1 = "23.0"; // Нижнее пороговое значение температуры по умолчанию
-String defTemp2 = "27.0";
+String defTemp1_1 = "22.0"; // Нижнее пороговое значение температуры по умолчанию
+String defTemp2 = "28.0";
 String defTemp2_1 = "25.0";
 String lastTemp; // Последние показания температуры, которые будут сравниваться с пороговыми значениями.
 
@@ -36,7 +36,7 @@ String defTime3 = "8";   // Периодичность включения тай
 String defTime3_1 = "4"; // Длительность работы таймера по умолчанию
 String defTime4 = "9";
 String defTime4_1 = "3";
-String defTime5 = "10";  // Периодичность включения таймера по умолчанию (в часах)
+String defTime5 = "10"; // Периодичность включения таймера по умолчанию (в часах)
 String defTime5_1 = "2";
 
 String Flag = "checked"; // Переменная "Flag" сообщает нам, установлен ли флажок режима "Авто" или нет.
@@ -266,7 +266,7 @@ void Timeleft() // Обратный остчет времени таймеров
     char buffer1[9];
     sprintf(buffer1, "%02d:%02d:%02d", H1, M, S);
     // Serial.println(buffer1);
-    ws.textAll("buffer1=" + String(buffer1));
+    ws.textAll("buffer1=" + String(buffer1)); // отправляем обратный остчет времени
   }
 
   if (Auto == "true" && !ledState4)
@@ -293,8 +293,7 @@ void initSPIFFS()
   if (!SPIFFS.begin())
   {
     // Serial.println("При монтировании SPIFFS произошла ошибка");
-    while (1)
-      ;
+    while (1);
   }
 }
 
@@ -346,12 +345,18 @@ void setup()
   // printLocalTime(); // Инициализация ntp клиента
 
   // Объявим GPIO выходы (по умолчанию LOW)
-  pinMode(ledPin1, OUTPUT); digitalWrite(ledPin1, LOW);
-  pinMode(ledPin2, OUTPUT); digitalWrite(ledPin2, LOW);
-  pinMode(ledPin3, OUTPUT); digitalWrite(ledPin3, LOW);
-  pinMode(ledPin4, OUTPUT); digitalWrite(ledPin4, LOW);
-  pinMode(ledPin5, OUTPUT); digitalWrite(ledPin5, LOW);
-  pinMode(ledPin6, OUTPUT); digitalWrite(ledPin6, HIGH); // Вывод светодиодного индикатора режимов Авто/Ручной.
+  pinMode(ledPin1, OUTPUT);
+  digitalWrite(ledPin1, LOW);
+  pinMode(ledPin2, OUTPUT);
+  digitalWrite(ledPin2, LOW);
+  pinMode(ledPin3, OUTPUT);
+  digitalWrite(ledPin3, LOW);
+  pinMode(ledPin4, OUTPUT);
+  digitalWrite(ledPin4, LOW);
+  pinMode(ledPin5, OUTPUT);
+  digitalWrite(ledPin5, LOW);
+  pinMode(ledPin6, OUTPUT);
+  digitalWrite(ledPin6, HIGH); // Вывод светодиодного индикатора режимов Авто/Ручной.
 
   // setup_1(); // отсылка к void setup() файла ntp.h
 
@@ -472,11 +477,16 @@ void loop()
   Timeleft();      // запуск функции Timeleft()
 
   // Проверяем, если галка снята (ручной режим), то...
-  if (Auto == "false") digitalWrite(ledPin1, ledState1);
-  if (Auto == "false") digitalWrite(ledPin2, ledState2);
-  if (Auto == "false") digitalWrite(ledPin3, ledState3);
-  if (Auto == "false") digitalWrite(ledPin4, ledState4);
-  if (Auto == "false") digitalWrite(ledPin5, ledState5);
+  if (Auto == "false")
+    digitalWrite(ledPin1, ledState1);
+  if (Auto == "false")
+    digitalWrite(ledPin2, ledState2);
+  if (Auto == "false")
+    digitalWrite(ledPin3, ledState3);
+  if (Auto == "false")
+    digitalWrite(ledPin4, ledState4);
+  if (Auto == "false")
+    digitalWrite(ledPin5, ledState5);
 
   // Считываем с датчика показания температуры каждые 5 секунд.
   uint32_t currentMillis = millis();
@@ -507,19 +517,19 @@ void loop()
     // #######################  Раздел открывания/закрывания форточек ############################
 
     // Верхняя форточка - порог открытия
-    // if ((IN4 > defTemp1.toFloat() && (IN8 < 50)) && Auto == "true" && !triggerActive1)  // с датчиком дождя
-    if ((IN4 > defTemp1.toFloat()) && Auto == "true" && !triggerActive1)                   // без датчика дождя
+    if ((IN4 > defTemp1.toFloat() && (IN9 < 50)) && Auto == "true" && !triggerActive1) // с датчиком дождя
+    // if ((IN4 > defTemp1.toFloat()) && Auto == "true" && !triggerActive1) // без датчика дождя
     {
       ws.textAll(String(!ledState1)); // отправляем статус кнопки "ON"
-      // String message = String("Верхняя - t° выше порога. Текущая: ") + String("IN4") + String("C");
-      // Serial.println(message);
+      //  String message = String("Верхняя - t° выше порога. Текущая: ") + String("IN4") + String("C");
+      //  Serial.println(message);
       triggerActive1 = true;
       digitalWrite(ledPin1, HIGH);
     }
 
     // Порог закрытия
-    // if (((IN4 < defTemp1_1.toFloat()) || (IN8 > 50)) && Auto == "true" && triggerActive1)
-    if ((IN4 < defTemp1_1.toFloat()) && Auto == "true" && triggerActive1)
+    if (((IN4 < defTemp1_1.toFloat()) || (IN9 > 50)) && Auto == "true" && triggerActive1)
+    // if ((IN4 < defTemp1_1.toFloat()) && Auto == "true" && triggerActive1)
     {
       ws.textAll(String(ledState1)); // отправляем статус кнопки "OFF"
       // String message = String("Верхняя - t° ниже порога. Текущая: ") + String("IN4") + String("C");
@@ -551,32 +561,32 @@ void loop()
 
   // #########################  Дальше раздел таймеров полива ############################
 
-  if (round(millis() / 3600000) - timer1 >= (ledState3 ? defTime3_1.toFloat() : defTime3.toFloat()) && Auto == "true" && !triggerActive3)
+  if (millis() / 3600000 - timer1 >= (ledState3 ? defTime3_1.toFloat() : defTime3.toFloat()) && Auto == "true" && !triggerActive3)
   // if (millis() / 1000 - timer1 >= (ledState3 ? 5 : 13) && Auto == "true" && !triggerActive3)
   {
-    ws.textAll(String(!ledState3 + 4));  // отправляем состояние кнопки
     // timer1 = millis() / 1000;
-    timer1 = round(millis() / 3600000);  // каждый час перезаписываем в переменную timer1 текущее значение millis()
-    ledState3 = !ledState3;              // Проверить нужен или нет?
-   // triggerActive3 = true;             // Проверить нужен или нет?
-    digitalWrite(ledPin3, ledState3);    // переключаем состояние PIN
+    timer1 = millis() / 3600000; // каждый час перезаписываем в переменную timer1 текущее значение millis()
+    ledState3 = !ledState3;             // Проверить нужен или нет?
+    // triggerActive3 = true;            // Проверить нужен или нет?
+    digitalWrite(ledPin3, ledState3);   // переключаем состояние PIN
+    ws.textAll(String(!ledState3 + 4)); // отправляем состояние кнопки
   }
 
   // ######## 2 #########
   if (millis() / 3600000 - timer2 >= (ledState4 ? defTime4_1.toFloat() : defTime4.toFloat()) && Auto == "true" && !triggerActive4)
   {
-    ws.textAll(String(!ledState4 + 6));
     timer2 = millis() / 3600000;
     ledState4 = !ledState4;
     digitalWrite(ledPin4, ledState4);
+    ws.textAll(String(!ledState4 + 6));
   }
 
   //######### 3 #########
   if (millis() / 3600000 - timer3 >= (ledState5 ? defTime5_1.toFloat() : defTime5.toFloat()) && Auto == "true" && !triggerActive5)
   {
-    ws.textAll(String(!ledState5 + 8));
     timer3 = millis() / 3600000;
     ledState5 = !ledState5;
     digitalWrite(ledPin5, ledState5);
+    ws.textAll(String(!ledState5 + 8));
   }
 }
