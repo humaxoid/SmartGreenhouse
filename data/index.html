@@ -14,8 +14,8 @@
                 <h1 style="color:#FFFFFF"><img id="home" src="casa.png" alt="img"> Контрольная панель - "Умная теплица"</h1>
                 <hr class="hr-shadow">
                 <div class="img-block"><img src="teplica.png" alt="picture">
-                        <div class="txt-top" style="top:-10px; left:680px;"><img src="https://kzpm.org/img/picture_main/pic1.gif" id="wether" alt="img" height="142" width="172"></div>
-                        <div class="txt-top" style="top:11px; left:510px;"><img src="https://kzpm.org/img/picture_main/down.gif" id="winimg" alt="img" height="138" width="102"></div>
+                        <div class="txt-top" style="top:-10px; left:680px;"><img src="pic1.gif" id="wether" alt="img" height="142" width="172"></div>
+                        <div class="txt-top" style="top:11px; left:510px;"><img src="down.gif" id="winimg" alt="img" height="138" width="102"></div>
                         <div class="txt-top" style="top:10px; left:65px;"><img src='temp.png' alt="img">&nbsp;&nbsp;Температура:&nbsp;&nbsp;<span id="in_1"></span> &nbsp;°C</div>
                         <div class="txt-top" style="top:50px; left:65px;"><img src='humid.png' alt="img">&nbsp;&nbsp;Влажность:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="in_2"></span>&nbsp; &#37;</div>
                         <div class="txt-top" style="top:260px; left:480px;"><img src='sun.png' alt="img">Освещенность:&nbsp;&nbsp;<span id="in_3"></span> &nbsp;люкс</div>
@@ -32,30 +32,30 @@
 
                         <div class="txt-left" style='top:150px; left:-170px;'><label for="threshold_input1"><b>t °C откр. &nbsp; t °C закр.</b><br><br>&nbsp; Верхняя форточка</label>
                                 <form action="/get">
-                                        <input type="number" min="24" max="31" step="0.5" id="dva1" title="Введите температурный порог открытия форточки" name="threshold_input1" value="%THRESHOLD1%" required>&nbsp; &nbsp;
-                                        <input type="number" min="23" max="30" step="0.5" id="dva2" title="Введите температурный порог закрытия форточек" name="threshold_input1_1" value="%THRESHOLD1_1%" required>
+                                        <input type="number" min="22" max="30" step="0.5" id="dva1" title="Введите температурный порог открытия форточки" name="threshold_input1" value="%THRESHOLD1%" required>&nbsp; &nbsp;
+                                        <input type="number" min="20" max="27" step="0.5" id="dva2" title="Введите температурный порог закрытия форточек" name="threshold_input1_1" value="%THRESHOLD1_1%" required>
                                         <br>
                                         <label for="threshold_input2">&nbsp; Нижние форточки </label>
                                         <br>
-                                        <input type="number" min="24" max="31" step="0.5" id="dva3" title="Введите температурный порог открытия форточки" name="threshold_input2" value="%THRESHOLD2%" required>&nbsp; &nbsp;
-                                        <input type="number" min="23" max="30" step="0.5" id="dva4" title="Введите температурный порог закрытия форточек" name="threshold_input2_1" value="%THRESHOLD2_1%" required>
+                                        <input type="number" min="24" max="32" step="0.5" id="dva3" title="Введите температурный порог открытия форточки" name="threshold_input2" value="%THRESHOLD2%" required>&nbsp; &nbsp;
+                                        <input type="number" min="22" max="29" step="0.5" id="dva4" title="Введите температурный порог закрытия форточек" name="threshold_input2_1" value="%THRESHOLD2_1%" required>
                                         <br>
                                         <br>
                                         <br>
                                         <label for="time_input3"><b> &nbsp;Период &nbsp; &nbsp;Длительн &nbsp; &nbsp;Осталось</b><br><br>&nbsp; &nbsp; &nbsp; &nbsp; Грядка №1</label>
                                         <br>
                                         <input type="number" min="1" max="96" step="1" id="dva1" title="Введите интервал включения полива в часах" name="time_input3" value="%TIME3%" required>&nbsp; &nbsp;
-                                        <input type="number" min="1" max="18" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input3_1" value="%TIME3_1%" required> &nbsp; &nbsp;<span id="time1"></span>
+                                        <input type="number" min="1" max="12" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input3_1" value="%TIME3_1%" required> &nbsp; &nbsp;<span id="time1"></span>
                                         <br>
                                         <label for="time_input4">&nbsp; &nbsp; &nbsp; &nbsp; Грядка №2 </label>
                                         <br>
                                         <input type="number" min="6" max="96" step="1" id="dva1" title="Введите интервал включения полива в часах" name="time_input4" value="%TIME4%" required>&nbsp; &nbsp;
-                                        <input type="number" min="1" max="18" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input4_1" value="%TIME4_1%" required>&nbsp; &nbsp;<span id="time2"></span>
+                                        <input type="number" min="1" max="12" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input4_1" value="%TIME4_1%" required>&nbsp; &nbsp;<span id="time2"></span>
                                         <br>
                                         <label for="time_input5">&nbsp; &nbsp; &nbsp; &nbsp; Грядка №3 </label>
                                         <br>
                                         <input type="number" min="6" max="96" step="1" id="dva1" title="Введите интервал включения полива в часах" name="time_input5" value="%TIME5%" required>&nbsp; &nbsp;
-                                        <input type="number" min="1" max="18" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input5_1" value="%TIME5_1%" required>
+                                        <input type="number" min="1" max="12" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input5_1" value="%TIME5_1%" required>
                                         &nbsp; &nbsp;<span id="time3"></span>
                                         <br>
                                         <br>

@@ -8,8 +8,8 @@
 #include <sensors.h>
 
 // Задаем сетевые настройки
-const char *ssid = "uname";
-const char *password = "pass";
+const char *ssid = "Satman_WLAN";
+const char *password = "9uthfim8";
 AsyncWebServer server(80); // Запускаем асинхронный веб-сервер на 80 порту
 AsyncWebSocket ws("/ws");  // Создаём объект, который будет обрабатывать websocket-ы:
 
@@ -26,10 +26,10 @@ bool ledState1 = false, ledState2 = false, ledState3 = false, ledState4 = false,
 #define ledPin5 27 // Таймер грядки-3
 #define ledPin6 2  // Вывод на светодиод режима Авто/Ручной.
 
-String defTemp1 = "25.0";   // Верхнее пороговое значение температуры по умолчанию
+String defTemp1 = "26.0";   // Верхнее пороговое значение температуры по умолчанию
 String defTemp1_1 = "22.0"; // Нижнее пороговое значение температуры по умолчанию
 String defTemp2 = "28.0";
-String defTemp2_1 = "25.0";
+String defTemp2_1 = "24.0";
 String lastTemp; // Последние показания температуры, которые будут сравниваться с пороговыми значениями.
 
 String defTime3 = "8";   // Периодичность включения таймера по умолчанию
@@ -329,8 +329,7 @@ void notFound(AsyncWebServerRequest *request)
   request->send(404, "text/plain;charset=utf-8", "Страница не найдена");
 }
 
-void setup()
-{
+void setup() {
   // Зададим скорость последовательного порта.
   Serial.begin(115200);
   delay(1000);
@@ -345,18 +344,12 @@ void setup()
   // printLocalTime(); // Инициализация ntp клиента
 
   // Объявим GPIO выходы (по умолчанию LOW)
-  pinMode(ledPin1, OUTPUT);
-  digitalWrite(ledPin1, LOW);
-  pinMode(ledPin2, OUTPUT);
-  digitalWrite(ledPin2, LOW);
-  pinMode(ledPin3, OUTPUT);
-  digitalWrite(ledPin3, LOW);
-  pinMode(ledPin4, OUTPUT);
-  digitalWrite(ledPin4, LOW);
-  pinMode(ledPin5, OUTPUT);
-  digitalWrite(ledPin5, LOW);
-  pinMode(ledPin6, OUTPUT);
-  digitalWrite(ledPin6, HIGH); // Вывод светодиодного индикатора режимов Авто/Ручной.
+  pinMode(ledPin1, OUTPUT); digitalWrite(ledPin1, LOW);
+  pinMode(ledPin2, OUTPUT); digitalWrite(ledPin2, LOW);
+  pinMode(ledPin3, OUTPUT); digitalWrite(ledPin3, LOW);
+  pinMode(ledPin4, OUTPUT); digitalWrite(ledPin4, LOW);
+  pinMode(ledPin5, OUTPUT); digitalWrite(ledPin5, LOW);
+  pinMode(ledPin6, OUTPUT); digitalWrite(ledPin6, HIGH); // Вывод светодиодного индикатора режимов Авто/Ручной.
 
   // setup_1(); // отсылка к void setup() файла ntp.h
 
@@ -373,8 +366,17 @@ void setup()
   server.on("/teplica.png", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send(SPIFFS, "/teplica.png", "image/png"); });
 
-  server.on("/sungif.gif", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send(SPIFFS, "/sungif.gif", "image/gif"); });
+  server.on("/up.gif", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send(SPIFFS, "/up.gif", "image/gif"); });
+
+  server.on("/down.gif", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send(SPIFFS, "/down.gif", "image/gif"); });
+            
+  server.on("/pic1.gif", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send(SPIFFS, "/pic1.gif", "image/gif"); });
+
+  server.on("/pic2.gif", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send(SPIFFS, "/pic2.gif", "image/gif"); });
 
   server.on("/baklazan.gif", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send(SPIFFS, "/baklazan.gif", "image/gif"); });
@@ -477,16 +479,11 @@ void loop()
   Timeleft();      // запуск функции Timeleft()
 
   // Проверяем, если галка снята (ручной режим), то...
-  if (Auto == "false")
-    digitalWrite(ledPin1, ledState1);
-  if (Auto == "false")
-    digitalWrite(ledPin2, ledState2);
-  if (Auto == "false")
-    digitalWrite(ledPin3, ledState3);
-  if (Auto == "false")
-    digitalWrite(ledPin4, ledState4);
-  if (Auto == "false")
-    digitalWrite(ledPin5, ledState5);
+  if (Auto == "false") digitalWrite(ledPin1, ledState1);
+  if (Auto == "false") digitalWrite(ledPin2, ledState2);
+  if (Auto == "false") digitalWrite(ledPin3, ledState3);
+  if (Auto == "false") digitalWrite(ledPin4, ledState4);
+  if (Auto == "false") digitalWrite(ledPin5, ledState5);
 
   // Считываем с датчика показания температуры каждые 5 секунд.
   uint32_t currentMillis = millis();
@@ -497,8 +494,8 @@ void loop()
 
     // ############################# Защита от дождя ########################################
 
-    uint8_t IN9 = (output_value);      // Назначим локальную переменную IN9, для датчика дождя.
-    if ((IN9 > 50) && !triggerActive6) // Если пошел дождь, меняем анимацию на страничке.
+    uint8_t IN9 = (output_value2);       // Назначим локальную переменную IN9, для датчика дождя.
+    if ((IN9 > 100) && !triggerActive6)  // Если пошел дождь, меняем анимацию на страничке.
     {
       ws.textAll(String(!ledState6 + 10));
       // String message = String("Пошел дождь ") + String(IN9);
@@ -506,7 +503,7 @@ void loop()
       triggerActive6 = true;
     }
 
-    if ((IN9 < 50) && triggerActive6)
+    if ((IN9 < 100) && triggerActive6)
     {
       ws.textAll(String(ledState6 + 10));
       // String message = String("Дождь прекратился ") + String(IN9);
@@ -517,7 +514,7 @@ void loop()
     // #######################  Раздел открывания/закрывания форточек ############################
 
     // Верхняя форточка - порог открытия
-    if ((IN4 > defTemp1.toFloat() && (IN9 < 50)) && Auto == "true" && !triggerActive1) // с датчиком дождя
+    if ((IN4 > defTemp1.toFloat() && (IN9 < 150)) && Auto == "true" && !triggerActive1) // с датчиком дождя
     // if ((IN4 > defTemp1.toFloat()) && Auto == "true" && !triggerActive1) // без датчика дождя
     {
       ws.textAll(String(!ledState1)); // отправляем статус кнопки "ON"
@@ -528,7 +525,7 @@ void loop()
     }
 
     // Порог закрытия
-    if (((IN4 < defTemp1_1.toFloat()) || (IN9 > 50)) && Auto == "true" && triggerActive1)
+    if (((IN4 < defTemp1_1.toFloat()) || (IN9 > 150)) && Auto == "true" && triggerActive1)
     // if ((IN4 < defTemp1_1.toFloat()) && Auto == "true" && triggerActive1)
     {
       ws.textAll(String(ledState1)); // отправляем статус кнопки "OFF"
