@@ -341,7 +341,6 @@ void setup() {
   initWiFi();      // Инициализация WiFi
   initWebServer(); // Инициализация Web сервера
   initWebSocket(); // Инициализация Websocket
-  // printLocalTime(); // Инициализация ntp клиента
 
   // Объявим GPIO выходы (по умолчанию LOW)
   pinMode(ledPin1, OUTPUT); digitalWrite(ledPin1, LOW);
