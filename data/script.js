@@ -190,8 +190,8 @@ function onMessage(event) {
 			      document.getElementById('button5').style.backgroundColor = "#c90411"; arrayS[1]; break
 		case '9': document.getElementById("state5").innerHTML = "ON &nbsp;";
 			       document.getElementById('button5').style.backgroundColor = "#04b50a"; arrayS[1]; break
-		case '10': document.getElementById("wether").src = "https://kzpm.org/img/picture_main/pic1.gif"; arrayS[1]; break
-		case '11': document.getElementById("wether").src = "https://kzpm.org/img/picture_main/pic2.gif"; arrayS[1]; break
+		case '10': document.getElementById("wether").src = "pic1.gif"; arrayS[1]; break
+		case '11': document.getElementById("wether").src = "pic2.gif"; arrayS[1]; break
 	}
 }
 

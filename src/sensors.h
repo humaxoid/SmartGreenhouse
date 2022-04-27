@@ -51,7 +51,7 @@ String getLightLevel()
   uint16_t IN3 = lightMeter.readLightLevel(); // Считывание данных и создание переменной с именем IN3
   // Serial.print("Освещенность: ");             // Вывод текста в монитор порта
   // Serial.print(IN3);                          // Вывод показаний в последовательный монитор порта
-                                              // Serial.println(" люкс");
+  // Serial.println(" люкс");
   return String(IN3);
 }
 
@@ -101,7 +101,7 @@ String gettemperature3()
   // - затем умножаем его на коэффициент, соответствующий разрешающей способности (для 12 бит по умолчанию - это 0,0625)
   float temperature = ((data[1] << 8) | data[0]) * 0.0625;
 
-  uint8_t IN7 = ((temperature) + 2.3); // Считывание данных и создание переменной с именем IN7, поправочный коэффициент +2,3 гр.
+  uint8_t IN7 = temperature; // Считывание данных и создание переменной с именем IN7, поправочный коэффициент +2,3 гр.
   return String(IN7);
 }
 
@@ -123,9 +123,9 @@ int output_value2;
 
 String getoutput_value2()
 {
-  output_value = analogRead(moisture_pin2);
-  output_value = map(output_value, 4090, 2900, 0, 100); // Настроить, где: 4090=0% влажности, 2900=100% влажности.
-  uint8_t IN9 = (output_value);
+  output_value2 = analogRead(moisture_pin2);
+  output_value2 = map(output_value2, 4090, 2900, 0, 100); // Настроить, где: 4090=0% влажности, 2900=100% влажности.
+  uint8_t IN9 = (output_value2);
   return String(IN9);
 }
 
@@ -138,7 +138,7 @@ void initBME280()
     Serial.println("Не обнаружен датчик BME280, проверьте соединение");
     while (1);
   }
-  delayTime = 1000; // Задержка для сериал монитора
+  // delayTime = 1000; // Задержка для сериал монитора
 }
 
 void initDHT22()
