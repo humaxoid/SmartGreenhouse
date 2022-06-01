@@ -104,7 +104,7 @@ p {
 }
 	
  h1 {	 
-    text-align: center;          /* центровка заголовка */
+  text-align: center;            /* центровка заголовка */
 	font-size: 40px;               /* размер шрифта заголовка */
 	text-shadow: 3px 2px rgb(99, 98, 98);   /* тень */
 }
@@ -133,15 +133,16 @@ p {
 .ota {font-size: 1.05em; color: rgb(16, 67, 235);}    /* отступ слева и сверху для верхней надписи*/
 
 /*---------------- стиль кнопок «ON» и «OFF» -------------------- */
-.button {
-  padding: 5px 43px;               /*высота и ширина кнопки*/
-  font-size: 18px;                 /*размер шрифта кнопки (размер кнопки адаптируется под размер шрифта)*/
-  text-align: center;              /*центровка надписи внутри кнопки*/
+.button_off {
+  cursor: pointer;                 /* при наведении мышки на кнопку появлялась рука */
+  padding: 5px 43px;               /* высота и ширина кнопки */
+  font-size: 18px;                 /* размер шрифта кнопки (размер кнопки адаптируется под размер шрифта) */
+  text-align: center;              /* центровка надписи внутри кнопки */
   outline: none;
-  color: #fff;                   /*цвет шрифта в кнопке*/
-  background-color: #c90411;     /*цвет кнопки*/
+  color: #fff;                     /* цвет шрифта в кнопке */
+  background-color: #c90411;       /* цвет кнопки */
   border: none;
-  border-radius: 5px;              /*радиус закругления углов кнопки*/
+  border-radius: 5px;              /* радиус закругления углов кнопки */
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   -khtml-user-select: none;
@@ -150,19 +151,21 @@ p {
   user-select: none;
   -webkit-tap-highlight-color: rgba(0,0,0,0);
  }
+
+ .button_on {background-color: #04b50a;}
  
 /*  button:hover {background-color: #6b0f8c} /* Цвет кнопки при наведении */
- .button:active {
-   background-color: #0f8b8d;
+ /* .button:active {
+   background-color: #04b50a;
    box-shadow: 2 2px #cdcdcd;
    transform: translateY(2px);
- }
+ } */
  
  .description {
-   font-size: 1.1rem;  /* размер шрифта описания кнопки */
-   color:#ffffff;      /* цвет шрифта описания кнопки*/
+   font-size: 1.1rem;    /* размер шрифта описания кнопки */
+   color:#ffffff;      /* цвет шрифта описания кнопки */
    font-weight: bold;
-   text-align: center; /*центровка надписи относительно кнопки*/
+   text-align: center;   /* центровка надписи относительно кнопки */
  }
  
  /*---------------- Окна ввода температурного порога и таймеров -------------------- */
