@@ -7,8 +7,8 @@
 #include <sensors.h>
 
 // Задаем сетевые настройки
-const char *ssid = "uname";
-const char *password = "password";
+const char *ssid = "IZU";
+const char *password = "9uthfim8";
 AsyncWebServer server(80); // Запускаем асинхронный веб-сервер на 80 порту
 AsyncWebSocket ws("/ws");  // Создаём объект, который будет обрабатывать websocket-ы:
 
@@ -322,8 +322,8 @@ void setup()
   Serial.begin(115200);
   delay(1000);
 
-  initDHT22();     // Инициализация датчика HDT22, в файле sensors.h
-  initBH1750();    // Инициализация датчика BH1750, в файле sensors.h
+  initDHT22(); // Инициализация датчика HDT22, в файле sensors.h
+  // initBH1750();    // Инициализация датчика BH1750, в файле sensors.h
   initBME280();    // Инициализация датчика BME280, в файле sensors.h
   initSPIFFS();    // Инициализация SPIFFS
   initWiFi();      // Инициализация WiFi
@@ -402,8 +402,8 @@ void setup()
   server.on("/IN2", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send_P(200, "text/plain", getDHTHumidity().c_str()); });
 
-  server.on("/IN3", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send_P(200, "text/plain", getLightLevel().c_str()); });
+  // server.on("/IN3", HTTP_GET, [](AsyncWebServerRequest *request)
+  //           { request->send_P(200, "text/plain", getLightLevel().c_str()); });
 
   server.on("/IN4", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send_P(200, "text/plain", getTemperature2().c_str()); });
