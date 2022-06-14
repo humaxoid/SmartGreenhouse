@@ -133,6 +133,7 @@ function onMessage(event) {
 		case 'buffer1': document.getElementById("time1").innerHTML = arrayS[1]; break;
 		case 'buffer2': document.getElementById("time2").innerHTML = arrayS[1]; break;
 		case 'buffer3': document.getElementById("time3").innerHTML = arrayS[1]; break;
+		case 'uptime': document.getElementById("uptime").innerHTML = arrayS[1]; break;
 		//---------------
 		case '0': document.getElementById("state1").innerHTML = "OFF";
 			      document.getElementById('button1').style.backgroundColor = "#c90411";
@@ -171,44 +172,6 @@ function onMessage(event) {
 		case '11': document.getElementById("wether").src = "pic2.gif"; arrayS[1]; 
 		           break;
 	}
-	// switch (event.data) {
-	// case '0': document.getElementById("state1").innerHTML = "OFF";
-	// 		document.getElementById('button1').style.backgroundColor = "#c90411";
-	// 		document.getElementById("winimg").src = "down.gif";
-	// 		break;
-	// case '1': document.getElementById("state1").innerHTML = "ON &nbsp;";
-	// 		document.getElementById('button1').style.backgroundColor = "#04b50a";
-	// 		document.getElementById("winimg").src = "up.gif";
-	// 		break;
-	// case '2': document.getElementById("state2").innerHTML = "OFF";
-	// 		document.getElementById('button2').style.backgroundColor = "#c90411";
-	// 		break;
-	// case '3': document.getElementById("state2").innerHTML = "ON &nbsp;";
-	// 		document.getElementById('button2').style.backgroundColor = "#04b50a";
-	// 		break;
-	// case '4': document.getElementById("state3").innerHTML = "OFF";
-	// 		document.getElementById('button3').style.backgroundColor = "#c90411";
-	// 		break;
-	// case '5': document.getElementById("state3").innerHTML = "ON &nbsp;";
-	// 		document.getElementById('button3').style.backgroundColor = "#04b50a";
-	// 		break;
-	// case '6': document.getElementById("state4").innerHTML = "OFF";
-	// 		document.getElementById('button4').style.backgroundColor = "#c90411";
-	// 		break;
-	// case '7': document.getElementById("state4").innerHTML = "ON &nbsp;";
-	// 		document.getElementById('button4').style.backgroundColor = "#04b50a";
-	// 		break;
-	// case '8': document.getElementById("state5").innerHTML = "OFF";
-	// 		document.getElementById('button5').style.backgroundColor = "#c90411";
-	// 		break;
-	// case '9': document.getElementById("state5").innerHTML = "ON &nbsp;";
-	// 		document.getElementById('button5').style.backgroundColor = "#04b50a";
-	// 		break;
-	// case '10': document.getElementById("wether").src = "pic1.gif";
-	// 		break;
-	// case '11': document.getElementById("wether").src = "pic2.gif";
-	// 		break;
-	// }
 }
 
 function onLoad(event) {  // Эта функция срабатывает при загрузке (обновлении) страницы

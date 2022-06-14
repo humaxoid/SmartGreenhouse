@@ -1,7 +1,7 @@
 // Файл конфигурации датчиков
 #include <Wire.h> // Библиотека взаимодействия с DS18B20, BH1750
 #include <DHT.h>
-//#include <BH1750.h>
+#include <BH1750.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 #include <DS18B20.h>
@@ -44,16 +44,16 @@ String getDHTHumidity()
   }
 }
 
-// // BH1750 - Датчик света
-// BH1750 lightMeter;
-// String getLightLevel()
-// {
-//   uint16_t IN3 = lightMeter.readLightLevel(); // Считывание данных и создание переменной с именем IN3
-//   // Serial.print("Освещенность: ");             // Вывод текста в монитор порта
-//   // Serial.print(IN3);                          // Вывод показаний в последовательный монитор порта
-//   // Serial.println(" люкс");
-//   return String(IN3);
-// }
+// BH1750 - Датчик света
+BH1750 lightMeter;
+String getLightLevel()
+{
+  uint16_t IN3 = lightMeter.readLightLevel(); // Считывание данных и создание переменной с именем IN3
+  // Serial.print("Освещенность: ");             // Вывод текста в монитор порта
+  // Serial.print(IN3);                          // Вывод показаний в последовательный монитор порта
+  // Serial.println(" люкс");
+  return String(IN3);
+}
 
 // ================= BME280 - Универсальный датчик ==============
 
@@ -136,7 +136,8 @@ void initBME280()
   if (!status)
   {
     Serial.println("Не обнаружен датчик BME280, проверьте соединение");
-    while (1);
+    while (1)
+      ;
   }
   // delayTime = 1000; // Задержка для сериал монитора
 }
@@ -147,14 +148,14 @@ void initDHT22()
   dht.begin();
 }
 
-// void initBH1750()
-// {
-//   Wire.begin();
-//   lightMeter.begin();
-//   // Serial.println(F("запуск датчика BH1750..."));
-// }
-
-void loopSensors()
+void initBH1750()
 {
-  delay(delayTime);
+  Wire.begin();
+  lightMeter.begin();
+  // Serial.println(F("запуск датчика BH1750..."));
 }
+
+// void loopSensors()
+// {
+//   delay(delayTime);
+// }

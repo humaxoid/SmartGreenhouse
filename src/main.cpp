@@ -7,8 +7,8 @@
 #include <sensors.h>
 
 // Задаем сетевые настройки
-const char *ssid = "uname";
-const char *password = "password";
+const char *ssid = "Satman_WLAN";
+const char *password = "9uthfim8";
 AsyncWebServer server(80); // Запускаем асинхронный веб-сервер на 80 порту
 AsyncWebSocket ws("/ws");  // Создаём объект, который будет обрабатывать websocket-ы:
 
@@ -31,12 +31,12 @@ String defTemp2 = "28.0";
 String defTemp2_1 = "24.0";
 String lastTemp; // Последние показания температуры, которые будут сравниваться с пороговыми значениями.
 
-String defTime3 = "8";   // Периодичность включения таймера по умолчанию
-String defTime3_1 = "4"; // Длительность работы таймера по умолчанию
-String defTime4 = "9";
-String defTime4_1 = "3";
-String defTime5 = "10"; // Периодичность включения таймера по умолчанию (в часах)
-String defTime5_1 = "2";
+String defTime3 = "28800";   // Периодичность включения таймера по умолчанию 8 часов
+String defTime3_1 = "14400"; // Длительность работы таймера по умолчанию 4 часа
+String defTime4 = "32400";
+String defTime4_1 = "10800";
+String defTime5 = "32400";
+String defTime5_1 = "10800";
 
 String Flag = "checked"; // Переменная "Flag" сообщает нам, установлен ли флажок режима "Авто" или нет.
 String Auto = "true";    // Если флажок установлен, переменная "Auto" примет значение true.
@@ -44,13 +44,16 @@ String Auto = "true";    // Если флажок установлен, пере
 // Локальные переменные для отслеживания, были ли активированы триггеры или нет.
 bool triggerActive1 = false; // верхн.форточка
 bool triggerActive2 = false; // нижн.форточка
+bool triggerActive3 = false; // таймер 1
+bool triggerActive4 = false; // таймер 1
+bool triggerActive5 = false; // таймер 1
 bool triggerActive6 = false; // анимация
 
 // Интервалы между показаниями датчиков и обр.отсчета таймеров
 uint32_t previousMillis1 = 0; // время, когда таймер последний раз сработал.
 uint32_t previousMillis2 = 0; // время, когда таймер последний раз сработал.
-const long interval1 = 5000;  // 5 сек. цикличность опроса датчиков
-const long interval2 = 2000;  // 1 сек. цикличность обратного отсчета времени
+const long interval1 = 5;     // 5 сек. цикличность опроса датчиков
+const long interval2 = 1;     // 2 сек. цикличность обратного отсчета времени
 
 // Следующие переменные будут использоваться для проверки того, получили ли мы HTTP-запрос
 // GET из этих полей ввода, и для сохранения значений в переменные.
@@ -322,8 +325,8 @@ void setup()
   Serial.begin(115200);
   delay(1000);
 
-  initDHT22(); // Инициализация датчика HDT22, в файле sensors.h
-  // initBH1750();    // Инициализация датчика BH1750, в файле sensors.h
+  initDHT22();     // Инициализация датчика HDT22, в файле sensors.h
+  initBH1750();    // Инициализация датчика BH1750, в файле sensors.h
   initBME280();    // Инициализация датчика BME280, в файле sensors.h
   initSPIFFS();    // Инициализация SPIFFS
   initWiFi();      // Инициализация WiFi
@@ -356,8 +359,6 @@ void setup()
 
   server.on("/seven-segment.ttf", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send(SPIFFS, "/seven-segment.ttf", "application/octet-stream"); });
-
-  // server.serveStatic("/", SPIFFS, "/");
 
   server.on("/teplica.png", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send(SPIFFS, "/teplica.png", "image/png"); });
@@ -402,8 +403,8 @@ void setup()
   server.on("/IN2", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send_P(200, "text/plain", getDHTHumidity().c_str()); });
 
-  // server.on("/IN3", HTTP_GET, [](AsyncWebServerRequest *request)
-  //           { request->send_P(200, "text/plain", getLightLevel().c_str()); });
+  server.on("/IN3", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send_P(200, "text/plain", getLightLevel().c_str()); });
 
   server.on("/IN4", HTTP_GET, [](AsyncWebServerRequest *request)
             { request->send_P(200, "text/plain", getTemperature2().c_str()); });
@@ -467,7 +468,7 @@ void setup()
 void loop()
 {
   ws.cleanupClients();
-  loopSensors(); // запуск loop в файле sensors.h
+  // loopSensors(); // запуск loop в файле sensors.h
 
   // Проверяем, если галка снята (ручной режим), то...
   if (Auto == "false")
@@ -481,10 +482,10 @@ void loop()
   if (Auto == "false")
     digitalWrite(ledPin5, ledState5);
 
-  uint32_t currentMillis = millis();
-  if (currentMillis - previousMillis1 >= interval1) // Считываем с датчика показания температуры каждые 10 секунд.
+  uint32_t currentMillis = millis() / 1000; // объявляем переменную currentMillis в секундах
+
+  if (currentMillis - previousMillis1 >= interval1) // Создаем локальную задержку 5 сек.
   {
-    previousMillis1 = currentMillis;
     //  Serial.print(bme.readTemperature());
     //  Serial.println(" °C");
     // ############################# Защита от дождя ########################################
@@ -514,10 +515,10 @@ void loop()
     {
       // String message = String("Верхняя форточка - t° выше порога");
       // Serial.println(message);
-      triggerActive1 = true;        // опрокинуть триггер
-      ledState1 = !ledState1;       // запоминать состояние
-      digitalWrite(ledPin1, HIGH);  // подаем на выход высокий уровень
-      ws.textAll(String(1));        // отправляем статус кнопки "ON"
+      triggerActive1 = true;       // опрокинуть триггер
+      ledState1 = !ledState1;      // запоминать состояние
+      digitalWrite(ledPin1, HIGH); // подаем на выход высокий уровень
+      ws.textAll(String(1));       // отправляем статус кнопки "ON"
     }
 
     // Порог закрытия
@@ -526,10 +527,10 @@ void loop()
     {
       // String message = String("Верхняя форточка - t° ниже порога");
       // Serial.println(message);
-      triggerActive1 = false;       // опрокинуть триггер
-      ledState1 = !ledState1;       // запоминать состояние
-      digitalWrite(ledPin1, LOW);   // подаем на выход низкий уровень
-      ws.textAll(String(0));        // отправляем статус кнопки "OFF"
+      triggerActive1 = false;     // опрокинуть триггер
+      ledState1 = !ledState1;     // запоминать состояние
+      digitalWrite(ledPin1, LOW); // подаем на выход низкий уровень
+      ws.textAll(String(0));      // отправляем статус кнопки "OFF"
     }
 
     // Нижняя форточка - порог открытия
@@ -553,71 +554,86 @@ void loop()
       digitalWrite(ledPin2, LOW);
       ws.textAll(String(2));
     }
-  }
-
-  // ############# Вывод обратного отсчета времени до срабатывания таймеров ##############
-
-  if (currentMillis - previousMillis2 >= interval2)
-  {
-    previousMillis2 = currentMillis;
-    {
-      uint32_t remains1 = defTime3.toFloat() * 3600000 - millis(); // остаток в миллисекундах
-      uint32_t remains2 = defTime4.toFloat() * 3600000 - millis();
-      uint32_t remains3 = defTime5.toFloat() * 3600000 - millis();
-      uint8_t H1 = remains1 / 3600000, H2 = remains2 / 3600000, H3 = remains3 / 3600000; // часы
-      uint8_t M = (remains1 % 3600000) / 60000, S = (remains1 % 3600000) / 1000 % 60;    // мин, секунды
-
-      if (Auto == "true" && !ledState3)
-      {
-        char buffer1[9];
-        sprintf(buffer1, "%02d:%02d:%02d", H1, M, S);
-        Serial.println(buffer1);
-        ws.textAll("buffer1=" + String(buffer1)); // отправляем обратный отсчет времени
-      }
-
-      if (Auto == "true" && !ledState4)
-      {
-        char buffer2[9];
-        sprintf(buffer2, "%02d:%02d:%02d", H2, M, S);
-        ws.textAll("buffer2=" + String(buffer2));
-      }
-
-      if (Auto == "true" && !ledState5)
-      {
-        char buffer3[9];
-        sprintf(buffer3, "%02d:%02d:%02d", H3, M, S);
-        ws.textAll("buffer3=" + String(buffer3));
-      }
-    }
+    previousMillis1 = currentMillis;
   }
 
   // #########################  Дальше раздел таймеров полива ############################
 
-  if (millis() / 3600000 - timer1 >= (ledState3 ? defTime3_1.toFloat() : defTime3.toFloat()) && Auto == "true")
-  // if (millis() / 1000 - timer1 >= (ledState3 ? 5 : 13) && Auto == "true" && !triggerActive3)
+  if (currentMillis - timer1 >= (ledState3 ? defTime3_1.toFloat() : defTime3.toFloat()) && Auto == "true" && !triggerActive3)
   {
-    // timer1 = millis() / 1000;
-    timer1 = millis() / 3600000; // каждый час перезаписываем в переменную timer1 текущее значение millis()
+    timer1 = currentMillis; //перезаписываем в переменную timer1 текущее значение millis()
     ledState3 = !ledState3;
     digitalWrite(ledPin3, ledState3);   // переключаем состояние PIN
     ws.textAll(String(!ledState3 + 4)); // отправляем состояние кнопки
+    Serial.println("ON");
   }
 
-  // ######## 2 #########
-  if (millis() / 3600000 - timer2 >= (ledState4 ? defTime4_1.toFloat() : defTime4.toFloat()) && Auto == "true")
+  if (currentMillis - timer2 >= (ledState4 ? defTime4_1.toFloat() : defTime4.toFloat()) && Auto == "true" && !triggerActive4)
   {
-    timer2 = millis() / 3600000;
+    timer2 = currentMillis;
     ledState4 = !ledState4;
     digitalWrite(ledPin4, ledState4);
     ws.textAll(String(!ledState4 + 6));
   }
 
-  //######### 3 #########
-  if (millis() / 3600000 - timer3 >= (ledState5 ? defTime5_1.toFloat() : defTime5.toFloat()) && Auto == "true")
+  if (currentMillis - timer3 >= (ledState5 ? defTime5_1.toFloat() : defTime5.toFloat()) && Auto == "true" && !triggerActive5)
   {
-    timer3 = millis() / 3600000;
+    timer3 = currentMillis;
     ledState5 = !ledState5;
     digitalWrite(ledPin5, ledState5);
     ws.textAll(String(!ledState5 + 8));
+  }
+
+  // ############# Обратный отсчет до срабатывания таймеров ##############
+
+  if (currentMillis - previousMillis2 >= interval2)
+  {
+    if (!ledState3 && Auto == "true")
+    {
+      uint32_t countdown1 = defTime3.toFloat() - (currentMillis - timer1);
+      uint8_t H1 = countdown1 / 3600;   // остаток часов
+      uint8_t M = countdown1 / 60 % 60; // остаток минут
+      uint8_t S = countdown1 % 60;      // остаток секунд
+
+      char buffer1[9];                              // кол-во знаков
+      sprintf(buffer1, "%02d:%02d:%02d", H1, M, S); // в буфер формат чч:мм:cc
+      ws.textAll("buffer1=" + String(buffer1));     // отправка на страницу
+      // Serial.println(buffer1);                   // в сериал порт
+    }
+
+    if (!ledState4 && Auto == "true")
+    {
+      uint32_t countdown2 = defTime4.toFloat() - (currentMillis - timer2);
+      uint8_t H2 = countdown2 / 3600;
+      uint8_t M2 = countdown2 / 60 % 60;
+      uint8_t S2 = countdown2 % 60;
+
+      char buffer2[9];
+      sprintf(buffer2, "%02d:%02d:%02d", H2, M2, S2);
+      ws.textAll("buffer2=" + String(buffer2));
+    }
+
+    if (!ledState5 && Auto == "true")
+    {
+      uint32_t countdown3 = defTime5.toFloat() - (currentMillis - timer3);
+      uint8_t H3 = countdown3 / 3600;
+      uint8_t M3 = countdown3 / 60 % 60;
+      uint8_t S3 = countdown3 % 60;
+
+      char buffer3[9];
+      sprintf(buffer3, "%02d:%02d:%02d", H3, M3, S3);
+      ws.textAll("buffer3=" + String(buffer3));
+    }
+    // uptime //
+    uint8_t D = currentMillis / 3600 / 24; // дни
+    uint8_t H = currentMillis / 3600 % 24; // часы
+    uint8_t M = currentMillis / 60 % 60;   // минуты
+    // uint8_t S = currentMillis % 60;         // секунды
+
+    char uptime[10];                             // кол-во знаков
+    sprintf(uptime, "%02d  %02d:%02d", D, H, M); // в буфер формат чч:мм:cc
+    ws.textAll("uptime=" + String(uptime));
+    Serial.println(uptime); // в сериал порт
+    previousMillis2 = currentMillis;
   }
 }

@@ -30,7 +30,17 @@
                         <div class='txt-top' style='top:430px; left:470px;'><img src='baklazan.gif' alt='img' height='120' width='80'></div>
                         <div class='txt-top' style='top:430px; left:730px;'><img src='baklazan.gif' alt='img' height='120' width='80'></div>
 
-                        <div class='txt-left' style='top:150px; left:-170px;'><label for='threshold_input1'><b>t °C откр. &nbsp; t °C закр.</b><br><br>&nbsp; Верхняя форточка</label>
+                        <div class='txt-left' style='top:10px; left:-170px;'>
+						<b>&nbsp; &nbsp; ВРЕМЯ РАБОТЫ</b>
+						<br>
+						<b>&nbsp; дни &nbsp; &nbsp; &nbsp; &nbsp; часы &nbsp; &nbsp; мин.</b>
+						<br>
+						<span id='uptime'></span>
+						<br>
+						<br>
+						<br>
+						<br>
+						<label for='threshold_input1'><b>t °C откр. &nbsp; t °C закр.</b><br><br>&nbsp; Верхняя форточка</label>
                                 <form action='/get'>
                                         <input type='number' min='22' max='30' step='0.5' id='dva1' title='Введите температурный порог открытия форточки' name='threshold_input1' value='%THRESHOLD1%' required>&nbsp; &nbsp;
                                         <input type='number' min='20' max='27' step='0.5' id='dva2' title='Введите температурный порог закрытия форточек' name='threshold_input1_1' value='%THRESHOLD1_1%' required>
@@ -44,20 +54,20 @@
                                         <br>
                                         <label for='time_input3'><b> &nbsp;Период &nbsp; &nbsp;Длительн &nbsp; &nbsp;Осталось</b><br><br>&nbsp; &nbsp; &nbsp; &nbsp; Грядка №1</label>
                                         <br>
-                                        <input type='number' min='1' max='96' step='1' id='dva1' title='Введите интервал включения полива в часах' name='time_input3' value='%TIME3%' required>&nbsp; &nbsp;
-                                        <input type='number' min='1' max='12' step='1' id='dva1' title='Введите продолжительность полива в часах' name='time_input3_1' value='%TIME3_1%' required> 
+                                        <input type='number' min='10' max='604800' step='1' id='dva1' title='Введите интервал включения полива в часах' name='time_input3' value='%TIME3%' required>&nbsp; &nbsp;
+                                        <input type='number' min='3' max='43200' step='1' id='dva1' title='Введите продолжительность полива в часах' name='time_input3_1' value='%TIME3_1%' required> 
                                         &nbsp; &nbsp;<span id='time1'></span>
                                         <br>
                                         <label for='time_input4'>&nbsp; &nbsp; &nbsp; &nbsp; Грядка №2 </label>
                                         <br>
-                                        <input type='number' min='6' max='96' step='1' id='dva1' title='Введите интервал включения полива в часах' name='time_input4' value='%TIME4%' required>&nbsp; &nbsp;
-                                        <input type='number' min='1' max='12' step='1' id='dva1' title='Введите продолжительность полива в часах' name='time_input4_1' value='%TIME4_1%' required>
+                                        <input type='number' min='10' max='604800' step='1' id='dva1' title='Введите интервал включения полива в часах' name='time_input4' value='%TIME4%' required>&nbsp; &nbsp;
+                                        <input type='number' min='3' max='43200' step='1' id='dva1' title='Введите продолжительность полива в часах' name='time_input4_1' value='%TIME4_1%' required>
                                         &nbsp; &nbsp;<span id='time2'></span>
                                         <br>
                                         <label for='time_input5'>&nbsp; &nbsp; &nbsp; &nbsp; Грядка №3 </label>
                                         <br>
-                                        <input type='number' min='6' max='96' step='1' id='dva1' title='Введите интервал включения полива в часах' name='time_input5' value='%TIME5%' required>&nbsp; &nbsp;
-                                        <input type='number' min='1' max='12' step='1' id='dva1' title='Введите продолжительность полива в часах' name='time_input5_1' value='%TIME5_1%' required>
+                                        <input type='number' min='10' max='604800' step='1' id='dva1' title='Введите интервал включения полива в часах' name='time_input5' value='%TIME5%' required>&nbsp; &nbsp;
+                                        <input type='number' min='3' max='43200' step='1' id='dva1' title='Введите продолжительность полива в часах' name='time_input5_1' value='%TIME5_1%' required>
                                         &nbsp; &nbsp;<span id='time3'></span>
                                         <br>
                                         <br>
