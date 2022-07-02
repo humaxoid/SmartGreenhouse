@@ -9,7 +9,7 @@ setInterval(function () {
 	};
 	xhttp.open("GET", "/IN1", true); // Делаем запрос о температуре в скетч.
 	xhttp.send();
-}, 5000);
+}, 9000);
 
 setInterval(function () {
 	var xhttp = new XMLHttpRequest();
@@ -20,7 +20,7 @@ setInterval(function () {
 	};
 	xhttp.open("GET", "/IN2", true);
 	xhttp.send();
-}, 5000);
+}, 9000);
 
 setInterval(function () {
 	var xhttp = new XMLHttpRequest();
@@ -42,7 +42,7 @@ setInterval(function () {
 	};
 	xhttp.open("GET", "/IN4", true);
 	xhttp.send();
-}, 5000);
+}, 2000);
 
 setInterval(function () {
 	var xhttp = new XMLHttpRequest();
@@ -53,7 +53,7 @@ setInterval(function () {
 	};
 	xhttp.open("GET", "/IN5", true);
 	xhttp.send();
-}, 5000);
+}, 2000);
 
 setInterval(function () {
 	var xhttp = new XMLHttpRequest();
@@ -64,7 +64,7 @@ setInterval(function () {
 	};
 	xhttp.open("GET", "/IN6", true);
 	xhttp.send();
-}, 5000);
+}, 2000);
 
 setInterval(function () {
 	var xhttp = new XMLHttpRequest();
@@ -88,42 +88,6 @@ setInterval(function () {
 	xhttp.send();
 }, 5000);
 
-// Выводим остаток времени до срабатывания таймера №1
-setInterval(function () {
-	var xhttp = new XMLHttpRequest();
-	xhttp.onreadystatechange = function () {
-		if (this.readyState == 4 && this.status == 200) {
-			document.getElementById("time1").innerHTML = this.responseText; // Отправляем в html по id "dateTime1"
-		}
-	};
-	xhttp.open("GET", "/time_Left1", true);
-	xhttp.send();
-}, 1000);
-
-// Выводим остаток времени до срабатывания таймера №2
-setInterval(function () {
-	var xhttp = new XMLHttpRequest();
-	xhttp.onreadystatechange = function () {
-		if (this.readyState == 4 && this.status == 200) {
-			document.getElementById("time2").innerHTML = this.responseText; // Отправляем в html по id "dateTime1"
-		}
-	};
-	xhttp.open("GET", "/time_Left2", true);
-	xhttp.send();
-}, 1000);
-
-// Выводим остаток времени до срабатывания таймера №3
-setInterval(function () {
-	var xhttp = new XMLHttpRequest();
-	xhttp.onreadystatechange = function () {
-		if (this.readyState == 4 && this.status == 200) {
-			document.getElementById("time3").innerHTML = this.responseText; // Отправляем в html по id "dateTime1"
-		}
-	};
-	xhttp.open("GET", "/time_Left3", true);
-	xhttp.send();
-}, 1000);
-
 // ======================== Кнопки =====================================
 
 var gateway = `ws://${window.location.hostname}/ws`; // Шлюз-это точка входа в интерфейс WebSocket, возвращает текущий адрес страницы (IP-адрес веб-сервера).
@@ -146,6 +110,8 @@ function initWebSocket() {
 
 function onOpen(event) {
 	console.log('Соединение открыто');
+	//	document.getElementById('button1_off').style.backgroundColor = "#c90411"; // при обновлении страницы, красим кнопку в красный цвет.
+	//	document.getElementById('button1_on').style.backgroundColor = "#04b50a";  // при обновлении страницы, красим кнопку в зеленный цвет.
 }
 
 /* Событие OnClose возникает всякий раз, когда клиент отключен. Клиент удаляется из списка и информирует 
@@ -164,40 +130,63 @@ function onClose(event) {
 function onMessage(event) {
 	var arrayS = event.data.split("=");
 	switch (arrayS[0]) {
-		case 'buffer1': document.getElementById("time1").innerHTML = arrayS[1]; break
-		case 'buffer2': document.getElementById("time2").innerHTML = arrayS[1]; break
-		case 'buffer3': document.getElementById("time3").innerHTML = arrayS[1]; break
+		case 'buffer1': document.getElementById("time1").innerHTML = arrayS[1]; break;
+		case 'buffer2': document.getElementById("time2").innerHTML = arrayS[1]; break;
+		case 'buffer3': document.getElementById("time3").innerHTML = arrayS[1]; break;
+		case 'uptime': document.getElementById("uptime").innerHTML = arrayS[1]; break;
 		//---------------
 		case '0': document.getElementById("state1").innerHTML = "OFF";
 			      document.getElementById('button1').style.backgroundColor = "#c90411";
-			      document.getElementById("winimg").src = "https://kzpm.org/img/picture_main/down.gif"; arrayS[1]; break
+			      document.getElementById("winimg").src = "down.gif"; arrayS[1]; 
+				  break;
 		case '1': document.getElementById("state1").innerHTML = "ON &nbsp;";
 			      document.getElementById('button1').style.backgroundColor = "#04b50a";
-			      document.getElementById("winimg").src = "https://kzpm.org/img/picture_main/up.gif"; arrayS[1]; break
+			      document.getElementById("winimg").src = "up.gif"; arrayS[1]; 
+				  break;
 		case '2': document.getElementById("state2").innerHTML = "OFF";
-			      document.getElementById('button2').style.backgroundColor = "#c90411"; arrayS[1]; break
+			      document.getElementById('button2').style.backgroundColor = "#c90411"; arrayS[1]; 
+				  break;
 		case '3': document.getElementById("state2").innerHTML = "ON &nbsp";;
-			      document.getElementById('button2').style.backgroundColor = "#04b50a"; arrayS[1]; break
+			      document.getElementById('button2').style.backgroundColor = "#04b50a"; arrayS[1]; 
+				  break;
 		case '4': document.getElementById("state3").innerHTML = "OFF";
-			      document.getElementById('button3').style.backgroundColor = "#c90411"; arrayS[1]; break
+			      document.getElementById('button3').style.backgroundColor = "#c90411"; arrayS[1]; 
+				  break;
 		case '5': document.getElementById("state3").innerHTML = "ON &nbsp;";
-			      document.getElementById('button3').style.backgroundColor = "#04b50a"; arrayS[1]; break
+			      document.getElementById('button3').style.backgroundColor = "#04b50a"; arrayS[1]; 
+				  break;
 		case '6': document.getElementById("state4").innerHTML = "OFF";
-			      document.getElementById('button4').style.backgroundColor = "#c90411"; arrayS[1]; break
+			      document.getElementById('button4').style.backgroundColor = "#c90411"; arrayS[1]; 
+				  break;
 		case '7': document.getElementById("state4").innerHTML = "ON &nbsp;";
-			      document.getElementById('button4').style.backgroundColor = "#04b50a"; arrayS[1]; break
+			      document.getElementById('button4').style.backgroundColor = "#04b50a"; arrayS[1]; 
+				  break;
 		case '8': document.getElementById("state5").innerHTML = "OFF";
-			      document.getElementById('button5').style.backgroundColor = "#c90411"; arrayS[1]; break
+			      document.getElementById('button5').style.backgroundColor = "#c90411"; arrayS[1]; 
+				  break;
 		case '9': document.getElementById("state5").innerHTML = "ON &nbsp;";
+<<<<<<< HEAD
 			       document.getElementById('button5').style.backgroundColor = "#04b50a"; arrayS[1]; break
 		case '10': document.getElementById("wether").src = "pic1.gif"; arrayS[1]; break
 		case '11': document.getElementById("wether").src = "pic2.gif"; arrayS[1]; break
+=======
+			      document.getElementById('button5').style.backgroundColor = "#04b50a"; arrayS[1]; 
+				  break;
+		case '10': document.getElementById("wether").src = "pic1.gif"; arrayS[1]; 
+		           break;
+		case '11': document.getElementById("wether").src = "pic2.gif"; arrayS[1]; 
+		           break;
+>>>>>>> 40b19601cb18e418dace37630b3b6452b4b8bffa
 	}
 }
 
-function onLoad(event) {
+function onLoad(event) {  // Эта функция срабатывает при загрузке (обновлении) страницы
 	initWebSocket();
 	initButton();
+	//    var state;
+	// if (event.data == "1"){
+	//   document.getElementById('button1').style.backgroundColor = "#04b50a"; 
+	// }
 }
 
 /* Слушаем кнопку (html-->js) по ее идентификатору (button1) и добавляем команду событий 

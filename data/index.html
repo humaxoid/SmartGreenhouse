@@ -1,14 +1,15 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang='ru'>
 
 <head>
-        <meta charset="UTF-8" , name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta charset='UTF-8' , name='viewport' content='width=device-width, initial-scale=1.0'>
         <!-- Адаптация страницы -->
-        <link rel="icon" type="image/x-icon" href="favicon.ico">
-        <link rel="stylesheet" href="style.css">
+        <link rel='icon' type='image/x-icon' href='favicon.ico'>
+        <link rel='stylesheet' href='style.css'>
         <title>Smart Greenhouse</title>
 </head>
 
+<<<<<<< HEAD
 <body id="gradient">
         <div class="wrapper">
                 <h1 style="color:#FFFFFF"><img id="home" src="casa.png" alt="img"> Контрольная панель - "Умная теплица"</h1>
@@ -24,61 +25,118 @@
                         <div class="txt-top" style="top:380px; left:480px;"><img src='humid.png' alt="img">&nbsp;Влажность:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id="in_6"></span>&nbsp; &#37;</div>
                         <div class="txt-top" style="top:485px; left:219px;"><img src='temp.png' alt="img">&nbsp;<span id="in_7"></span> &nbsp;°C</div>
                         <div class="txt-top" style="top:515px; left:219px;"><img src='humid.png' alt="img">&nbsp;<span id="in_8"></span>&nbsp; &#37;</div>
+=======
+<body id='gradient'>
+        <div class='wrapper'>
+                <h1 style='color:#FFFFFF'><img id='home' src='casa.png' alt='img'> Контрольная панель - "Умная теплица"</h1>
+                <hr class='hr-shadow'>
+                <div class='img-block'><img src='teplica.png' alt='picture'>
+                        <div class='txt-top' style='top:-10px; left:680px;'><img src='pic1.gif' id='wether' alt='img' height='142' width='172'></div>
+                        <div class='txt-top' style='top:11px; left:510px;'><img src='down.gif' id='winimg' alt='img' height='138' width='102'></div>
+                        <div class='txt-top' style='top:10px; left:65px;'><img src='temp.png' alt='img'>&nbsp;&nbsp;Температура:&nbsp;&nbsp;<span id='in_1'></span> &nbsp;°C</div>
+                        <div class='txt-top' style='top:50px; left:65px;'><img src='humid.png' alt='img'>&nbsp;&nbsp;Влажность:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id='in_2'></span>&nbsp; &#37;</div>
+                        <div class='txt-top' style='top:260px; left:480px;'><img src='sun.png' alt='img'>Освещенность:&nbsp;&nbsp;<span id='in_3'></span> &nbsp;люкс</div>
+                        <div class='txt-top' style='top:300px; left:480px;'><img src='temp.png' alt='img'>&nbsp;Температура:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id='in_4'>%DATA4%</span> &nbsp;°C </div>
+                        <div class='txt-top' style='top:340px; left:480px;'><img src='flame.png' alt='img'>&nbsp;Давление:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id='in_5'></span> &nbsp;мм.рт.ст</div>
+                        <div class='txt-top' style='top:380px; left:480px;'><img src='humid.png' alt='img'>&nbsp;Влажность:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span id='in_6'></span>&nbsp; &#37;</div>
+                        <div class='txt-top' style='top:485px; left:219px;'><img src='temp.png' alt='img'>&nbsp;<span id='in_7'></span> &nbsp;°C</div>
+                        <div class='txt-top' style='top:515px; left:219px;'><img src='humid.png' alt='img'>&nbsp;<span id='in_8'></span>&nbsp; &#37;</div>
+>>>>>>> 40b19601cb18e418dace37630b3b6452b4b8bffa
 
-                        <div class="txt-top" style="top:430px; left:105px;"><img src="baklazan.gif" alt="img" height="120" width="80"></div>
-                        <div class="txt-top" style="top:430px; left:365px;"><img src="baklazan.gif" alt="img" height="120" width="80"></div>
-                        <div class="txt-top" style="top:430px; left:470px;"><img src="baklazan.gif" alt="img" height="120" width="80"></div>
-                        <div class="txt-top" style="top:430px; left:730px;"><img src="baklazan.gif" alt="img" height="120" width="80"></div>
+                        <div class='txt-top' style='top:430px; left:105px;'><img src='baklazan.gif' alt='img' height='120' width='80'></div>
+                        <div class='txt-top' style='top:430px; left:365px;'><img src='baklazan.gif' alt='img' height='120' width='80'></div>
+                        <div class='txt-top' style='top:430px; left:470px;'><img src='baklazan.gif' alt='img' height='120' width='80'></div>
+                        <div class='txt-top' style='top:430px; left:730px;'><img src='baklazan.gif' alt='img' height='120' width='80'></div>
 
+<<<<<<< HEAD
                         <div class="txt-left" style='top:150px; left:-170px;'><label for="threshold_input1"><b>t °C откр. &nbsp; t °C закр.</b><br><br>&nbsp; Верхняя форточка</label>
                                 <form action="/get">
                                         <input type="number" min="22" max="30" step="0.5" id="dva1" title="Введите температурный порог открытия форточки" name="threshold_input1" value="%THRESHOLD1%" required>&nbsp; &nbsp;
                                         <input type="number" min="20" max="27" step="0.5" id="dva2" title="Введите температурный порог закрытия форточек" name="threshold_input1_1" value="%THRESHOLD1_1%" required>
+=======
+                        <div class='txt-left' style='top:10px; left:-170px;'>
+						<b>&nbsp; &nbsp; ВРЕМЯ РАБОТЫ</b>
+						<br>
+						<b>&nbsp; дни &nbsp; &nbsp; &nbsp; &nbsp; часы &nbsp; &nbsp; мин.</b>
+						<br>
+						<span id='uptime'></span>
+						<br>
+						<br>
+						<br>
+						<br>
+						<label for='threshold_input1'><b>t °C откр. &nbsp; t °C закр.</b><br><br>&nbsp; Верхняя форточка</label>
+                                <form action='/get'>
+                                        <input type='number' min='22' max='30' step='0.5' id='dva1' title='Введите температурный порог открытия форточки' name='threshold_input1' value='%THRESHOLD1%' required>&nbsp; &nbsp;
+                                        <input type='number' min='20' max='27' step='0.5' id='dva2' title='Введите температурный порог закрытия форточек' name='threshold_input1_1' value='%THRESHOLD1_1%' required>
+>>>>>>> 40b19601cb18e418dace37630b3b6452b4b8bffa
                                         <br>
-                                        <label for="threshold_input2">&nbsp; Нижние форточки </label>
+                                        <label for='threshold_input2'>&nbsp; Нижние форточки </label>
                                         <br>
+<<<<<<< HEAD
                                         <input type="number" min="24" max="32" step="0.5" id="dva3" title="Введите температурный порог открытия форточки" name="threshold_input2" value="%THRESHOLD2%" required>&nbsp; &nbsp;
                                         <input type="number" min="22" max="29" step="0.5" id="dva4" title="Введите температурный порог закрытия форточек" name="threshold_input2_1" value="%THRESHOLD2_1%" required>
+=======
+                                        <input type='number' min='24' max='32' step='0.5' id='dva3' title='Введите температурный порог открытия форточки' name='threshold_input2' value='%THRESHOLD2%' required>&nbsp; &nbsp;
+                                        <input type='number' min='22' max='29' step='0.5' id='dva4' title='Введите температурный порог закрытия форточек' name='threshold_input2_1' value='%THRESHOLD2_1%' required>
+>>>>>>> 40b19601cb18e418dace37630b3b6452b4b8bffa
                                         <br>
                                         <br>
                                         <br>
-                                        <label for="time_input3"><b> &nbsp;Период &nbsp; &nbsp;Длительн &nbsp; &nbsp;Осталось</b><br><br>&nbsp; &nbsp; &nbsp; &nbsp; Грядка №1</label>
+                                        <label for='time_input3'><b> &nbsp;Период &nbsp; &nbsp;Длительн &nbsp; &nbsp;Осталось</b><br><br>&nbsp; &nbsp; &nbsp; &nbsp; Грядка №1</label>
                                         <br>
+<<<<<<< HEAD
                                         <input type="number" min="1" max="96" step="1" id="dva1" title="Введите интервал включения полива в часах" name="time_input3" value="%TIME3%" required>&nbsp; &nbsp;
                                         <input type="number" min="1" max="12" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input3_1" value="%TIME3_1%" required> &nbsp; &nbsp;<span id="time1"></span>
+=======
+                                        <input type='number' min='10' max='604800' step='1' id='dva1' title='Введите интервал включения полива в часах' name='time_input3' value='%TIME3%' required>&nbsp; &nbsp;
+                                        <input type='number' min='3' max='43200' step='1' id='dva1' title='Введите продолжительность полива в часах' name='time_input3_1' value='%TIME3_1%' required> 
+                                        &nbsp; &nbsp;<span id='time1'></span>
+>>>>>>> 40b19601cb18e418dace37630b3b6452b4b8bffa
                                         <br>
-                                        <label for="time_input4">&nbsp; &nbsp; &nbsp; &nbsp; Грядка №2 </label>
+                                        <label for='time_input4'>&nbsp; &nbsp; &nbsp; &nbsp; Грядка №2 </label>
                                         <br>
+<<<<<<< HEAD
                                         <input type="number" min="6" max="96" step="1" id="dva1" title="Введите интервал включения полива в часах" name="time_input4" value="%TIME4%" required>&nbsp; &nbsp;
                                         <input type="number" min="1" max="12" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input4_1" value="%TIME4_1%" required>&nbsp; &nbsp;<span id="time2"></span>
+=======
+                                        <input type='number' min='10' max='604800' step='1' id='dva1' title='Введите интервал включения полива в часах' name='time_input4' value='%TIME4%' required>&nbsp; &nbsp;
+                                        <input type='number' min='3' max='43200' step='1' id='dva1' title='Введите продолжительность полива в часах' name='time_input4_1' value='%TIME4_1%' required>
+                                        &nbsp; &nbsp;<span id='time2'></span>
+>>>>>>> 40b19601cb18e418dace37630b3b6452b4b8bffa
                                         <br>
-                                        <label for="time_input5">&nbsp; &nbsp; &nbsp; &nbsp; Грядка №3 </label>
+                                        <label for='time_input5'>&nbsp; &nbsp; &nbsp; &nbsp; Грядка №3 </label>
                                         <br>
+<<<<<<< HEAD
                                         <input type="number" min="6" max="96" step="1" id="dva1" title="Введите интервал включения полива в часах" name="time_input5" value="%TIME5%" required>&nbsp; &nbsp;
                                         <input type="number" min="1" max="12" step="1" id="dva1" title="Введите продолжительность полива в часах" name="time_input5_1" value="%TIME5_1%" required>
                                         &nbsp; &nbsp;<span id="time3"></span>
+=======
+                                        <input type='number' min='10' max='604800' step='1' id='dva1' title='Введите интервал включения полива в часах' name='time_input5' value='%TIME5%' required>&nbsp; &nbsp;
+                                        <input type='number' min='3' max='43200' step='1' id='dva1' title='Введите продолжительность полива в часах' name='time_input5_1' value='%TIME5_1%' required>
+                                        &nbsp; &nbsp;<span id='time3'></span>
+>>>>>>> 40b19601cb18e418dace37630b3b6452b4b8bffa
                                         <br>
                                         <br>
                                         <br>
-                                        <label for="enable_arm_input">Авто</label>
-                                        <input type="checkbox" name="enable_arm_input" value="true" %ENABLE_ARM_INPUT%>
-                                        <input type="submit" value="Применить">
+                                        <label for='enable_arm_input'>Авто</label>
+                                        <input type='checkbox' name='enable_arm_input' value='true' %ENABLE_ARM_INPUT%>
+                                        <input type='submit' value='Применить'>
                                         <br>
                                         <br>
                                         <br>
-                                        <div><a href="/update" class="ota">Обновление ПО</a></div>
+                                        <div><a href='/update' class='ota'>Обновление ПО</a></div>
                                 </form>
                         </div>
 
-                        <div class="txt-right" style='top:120px; left:900px;'>
-                                <div><p class="description">ВЕРХНЯЯ</p><button id="button1" class="button"><span id="state1">%STATE1%</span></button></div>
-                                <div><p class="description">НИЖНЯЯ </p><button id="button2" class="button"><span id="state2">%STATE2%</span></button></div>
-                                <div><p class="description">ГРЯДКА-1</p><button id="button3" class="button"><span id="state3">%STATE3%</span></button></div>
-                                <div><p class="description">ГРЯДКА-2</p><button id="button4" class="button"><span id="state4">%STATE4%</span></button></div>
-                                <div><p class="description">ГРЯДКА-3</p><button id="button5" class="button"><span id="state5">%STATE5%</span></button></div>
+                        <div class='txt-right' style='top:120px; left:900px;'>
+                                <div><p class='description'>ВЕРХНЯЯ</p><button id='button1' class='button_off'><span id='state1'>%STATE1%</span></button></div>
+                                <div><p class='description'>НИЖНЯЯ </p><button id='button2' class='button_off'><span id='state2'>%STATE2%</span></button></div>
+                                <div><p class='description'>ГРЯДКА-1</p><button id='button3' class='button_off'><span id='state3'>%STATE3%</span></button></div>                              
+                                <div><p class='description'>ГРЯДКА-2</p><button id='button4' class='button_off'><span id='state4'>%STATE4%</span></button></div>
+                                <div><p class='description'>ГРЯДКА-3</p><button id='button5' class='button_off'><span id='state5'>%STATE5%</span></button></div>
                         </div>
                 </div>
         </div>
-        <script src="script.js"></script>
+        <script src='script.js'></script>
 </body>
 </html>

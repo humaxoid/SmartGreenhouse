@@ -105,14 +105,14 @@ String gettemperature3()
   return String(IN7);
 }
 
-//Датчик Soil Moisture Sensor (Датчик влажности почвы)
+// Датчик Soil Moisture Sensor (Датчик влажности почвы)
 int moisture_pin = 36; // Указываем номер аналогового пина
 int output_value;
 
 String getoutput_value()
 {
   output_value = analogRead(moisture_pin);
-  output_value = map(output_value, 4090, 2900, 0, 100); // Настроить, где: 4090=0% влажности, 2900=100% влажности.
+  output_value = map(output_value, 4090, 1600, 0, 100); // Настроить, где: 4090 = 0% влажности, 2900 = 100% влажности.
   uint8_t IN8 = (output_value);                         // Считывание данных и создание переменной с именем IN8
   return String(IN8);
 }
@@ -136,7 +136,8 @@ void initBME280()
   if (!status)
   {
     Serial.println("Не обнаружен датчик BME280, проверьте соединение");
-    while (1);
+    while (1)
+      ;
   }
   // delayTime = 1000; // Задержка для сериал монитора
 }
@@ -154,7 +155,7 @@ void initBH1750()
   // Serial.println(F("запуск датчика BH1750..."));
 }
 
-void loopSensors()
-{
-  delay(delayTime);
-}
+// void loopSensors()
+// {
+//   delay(delayTime);
+// }
