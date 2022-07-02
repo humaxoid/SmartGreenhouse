@@ -7,8 +7,8 @@
 #include <sensors.h>
 
 // Задаем сетевые настройки
-const char *ssid = "Satman_WLAN";
-const char *password = "9uthfim8";
+const char *ssid = "uname";
+const char *password = "pass";
 AsyncWebServer server(80); // Запускаем асинхронный веб-сервер на 80 порту
 AsyncWebSocket ws("/ws");  // Создаём объект, который будет обрабатывать websocket-ы:
 
