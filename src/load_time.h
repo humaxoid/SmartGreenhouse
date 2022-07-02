@@ -5,6 +5,7 @@
 //   void loop() {
 //   {
 //     int Loadtime = millis() / 1000;
+
 //     // Считаем целые часы
 //     if (Loadtime / 60 / 60 < 10)
 //     {
@@ -12,6 +13,7 @@
 //     }
 //     Serial.print(Loadtime / 60 / 60);
 //     Serial.print(":");
+
 //     // Считаем минуты
 //     if (Loadtime / 60 % 60 < 10)
 //     {
@@ -19,6 +21,7 @@
 //     }
 //     Serial.print((Loadtime / 60) % 60);
 //     Serial.print(":");
+
 //     // Считаем секунды
 //     if (Loadtime % 60 < 10)
 //     {

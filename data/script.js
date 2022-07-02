@@ -9,7 +9,7 @@ setInterval(function () {
 	};
 	xhttp.open("GET", "/IN1", true); // Делаем запрос о температуре в скетч.
 	xhttp.send();
-}, 9000);
+}, 3000);
 
 setInterval(function () {
 	var xhttp = new XMLHttpRequest();
@@ -20,7 +20,7 @@ setInterval(function () {
 	};
 	xhttp.open("GET", "/IN2", true);
 	xhttp.send();
-}, 9000);
+}, 3000);
 
 setInterval(function () {
 	var xhttp = new XMLHttpRequest();
@@ -110,8 +110,6 @@ function initWebSocket() {
 
 function onOpen(event) {
 	console.log('Соединение открыто');
-	//	document.getElementById('button1_off').style.backgroundColor = "#c90411"; // при обновлении страницы, красим кнопку в красный цвет.
-	//	document.getElementById('button1_on').style.backgroundColor = "#04b50a";  // при обновлении страницы, красим кнопку в зеленный цвет.
 }
 
 /* Событие OnClose возникает всякий раз, когда клиент отключен. Клиент удаляется из списка и информирует 
@@ -165,28 +163,18 @@ function onMessage(event) {
 			      document.getElementById('button5').style.backgroundColor = "#c90411"; arrayS[1]; 
 				  break;
 		case '9': document.getElementById("state5").innerHTML = "ON &nbsp;";
-<<<<<<< HEAD
-			       document.getElementById('button5').style.backgroundColor = "#04b50a"; arrayS[1]; break
-		case '10': document.getElementById("wether").src = "pic1.gif"; arrayS[1]; break
-		case '11': document.getElementById("wether").src = "pic2.gif"; arrayS[1]; break
-=======
 			      document.getElementById('button5').style.backgroundColor = "#04b50a"; arrayS[1]; 
 				  break;
 		case '10': document.getElementById("wether").src = "pic1.gif"; arrayS[1]; 
 		           break;
 		case '11': document.getElementById("wether").src = "pic2.gif"; arrayS[1]; 
 		           break;
->>>>>>> 40b19601cb18e418dace37630b3b6452b4b8bffa
 	}
 }
 
 function onLoad(event) {  // Эта функция срабатывает при загрузке (обновлении) страницы
 	initWebSocket();
 	initButton();
-	//    var state;
-	// if (event.data == "1"){
-	//   document.getElementById('button1').style.backgroundColor = "#04b50a"; 
-	// }
 }
 
 /* Слушаем кнопку (html-->js) по ее идентификатору (button1) и добавляем команду событий 

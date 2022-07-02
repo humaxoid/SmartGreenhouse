@@ -13,7 +13,7 @@ background-position: center;          /* позиционируем по цен�
 /* ---------- Шрифты цифровых показателей ----------- */
  @font-face {
   font-family: 'seven-segment';
-  src: url("seven-segment.ttf") format("truetype")
+  src: url("seven-segment.otf") format("truetype")
 }
 
 #in_1 {

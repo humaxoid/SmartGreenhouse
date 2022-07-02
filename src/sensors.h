@@ -106,27 +106,14 @@ String gettemperature3()
 }
 
 // Датчик Soil Moisture Sensor (Датчик влажности почвы)
-int moisture_pin = 36; // Указываем номер аналогового пина
 int output_value;
 
 String getoutput_value()
 {
-  output_value = analogRead(moisture_pin);
-  output_value = map(output_value, 4090, 1600, 0, 100); // Настроить, где: 4090 = 0% влажности, 2900 = 100% влажности.
+  output_value = analogRead(36);                        // 36 это номер аналогового пина
+  output_value = map(output_value, 4095, 1600, 0, 100); // Настроить, где: 4095 = 0% влажности, 1600 = 100% влажности.
   uint8_t IN8 = (output_value);                         // Считывание данных и создание переменной с именем IN8
   return String(IN8);
-}
-
-// Датчик Soil Moisture Sensor (Датчик дождя)
-int moisture_pin2 = 39; // Указываем номер аналогового пина
-int output_value2;
-
-String getoutput_value2()
-{
-  output_value2 = analogRead(moisture_pin2);
-  output_value2 = map(output_value2, 4090, 2900, 0, 100); // Настроить, где: 4090=0% влажности, 2900=100% влажности.
-  uint8_t IN9 = (output_value2);
-  return String(IN9);
 }
 
 void initBME280()
