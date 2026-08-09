@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>SmartGreenhouse</title>
+    <link rel="icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/style.css">
+</head>
+
+<body>
+    <div class="login-screen" id="loginScreen">
+        <div class="login-card">
+            <div class="login-logo">&#11044; <span id="loginTitle" data-i18n="login_title">Sign in</span></div>
+            <div class="input-box"><input type="text" id="loginUser" autocomplete="username" placeholder=" "
+                    autocapitalize="none"><label data-i18n="login_user">Login</label></div>
+            <div class="input-box pass-wrap"><input type="password" id="loginPass" autocomplete="current-password"
+                    placeholder=" "><label data-i18n="login_pass">Password</label><button type="button" class="pass-eye"
+                    onclick="togglePass('loginPass')">&#128065;</button></div>
+            <div id="loginError" class="login-error" style="display:none"></div><button class="btn-login" id="btnLogin"
+                onclick="doLogin()" data-i18n="login_btn">Sign in</button>
+        </div>
+    </div>
+    <div class="app-shell" id="appShell" style="display:none">
+        <nav class="sidebar" id="sidebar">
+            <div class="sb-logo" id="sbLogo">&#11044; Smart Greenhouse</div>
+            <div class="sb-ws"><span id="wsStatus" class="ws-dot authing"></span><span id="wsLabel"
+                    style="color:#ff9800">Connecting...</span></div>
+            <div class="sb-info"><span class="sb-rssi" id="sbRssi" title="Wi-Fi RSSI">&#128246;<span class="rssi-bar"><i id="sbRssiFill"></i><b id="sbRssiPct">--%</b></span><span id="sbRssiDbm">-- dBm</span></span><span
+                    class="sb-heap" id="sbHeap" title="Free heap">-- KB</span></div><a class="sb-link sb-active"
+                href="#" data-page="dashboard" onclick="showPage('dashboard');return false;"
+                data-i18n="nav_control">Dashboard</a><a class="sb-link" href="#" data-page="settings"
+                onclick="showPage('settings');return false;" data-i18n="nav_settings">Settings</a><a class="sb-link"
+                href="#" id="aboutLink" data-i18n="nav_about">About</a>
+            <div class="sb-bottom"><button class="sb-logout" id="btnLogout" onclick="doLogout()"
+                    data-i18n="btn_logout">Logout</button></div>
+        </nav>
+        <div class="sb-overlay" id="sbOverlay" onclick="closeSidebar()"></div>
+        <div class="main-wrap">
+            <header class="top-bar"><button class="hamburger" onclick="toggleSidebar()"
+                    aria-label="Menu">&#9776;</button>
+                <div class="top-bar-right">
+                    <div class="hdr-block">
+                        <div class="hdr-label" id="lblTime" data-i18n="lbl_time">TIME</div>
+                        <div id="currentTime" class="seg-time"><span id="tH">--</span><span
+                                class="seg-colon">:</span><span id="tM">--</span></div>
+                    </div>
+                    <div class="hdr-block">
+                        <div class="hdr-label" data-i18n="lbl_uptime">UPTIME</div>
+                        <div id="uptime" class="seg-uptime"><span id="utD">--</span><span id="utH">--</span><span
+                                class="seg-colon">:</span><span id="utM">--</span></div>
+                    </div>
+                </div>
+            </header>
+            <main class="main-grid page-view" id="pageDashboard">
+                <section class="card">
+                    <div class="card-title" data-i18n="lbl_sensors">Sensors</div>
+                    <div class="gauges-row">
+                        <div class="gauge-wrap"><canvas id="cTemp" class="gauge-canvas"></canvas>
+                            <div class="gauge-val seg-val" id="gv0">-- &deg;C</div>
+                            <div class="gauge-label" data-i18n="lbl_temp">Temperature</div>
+                        </div>
+                        <div class="gauge-wrap"><canvas id="cHum" class="gauge-canvas"></canvas>
+                            <div class="gauge-val seg-val" id="gv1">-- %</div>
+                            <div class="gauge-label" data-i18n="lbl_hum">Humidity</div>
+                        </div>
+                        <div class="gauge-wrap"><canvas id="cPress" class="gauge-canvas"></canvas>
+                            <div class="gauge-val seg-val" id="gv2">-- mm</div>
+                            <div class="gauge-label" data-i18n="lbl_press">Pressure</div>
+                        </div>
+                    </div>
+                    <div class="sensor-extra">
+                        <div class="sensor-top-row">
+                            <div class="lux-block">&#9728; <span class="lux-val seg-val" id="luxVal">---</span> <span
+                                    class="lux-unit" data-i18n="lux_unit">lx</span></div>
+                            <div class="dht-block" id="dhtBlock">DHT22: <span class="dht-val seg-val"
+                                    id="dhtT">--.-</span>&deg;C&nbsp;/&nbsp;<span class="dht-val seg-val"
+                                    id="dhtH">--.-</span>%</div>
+                        </div>
+                        <div class="weather-block"><img id="moonGif" class="weather-gif" src="moon.gif" alt="Night"><img
+                                id="cloudGif" class="weather-gif" src="cloud.gif" alt="Cloudy"><img id="sunGif"
+                                class="weather-gif visible" src="sun.gif" alt="Sunny"><img id="rainGif"
+                                class="weather-gif" src="rain.gif" alt="Rain"></div>
+                    </div>
+                    <div id="sensorStatusRow"></div>
+                </section>
+                <section class="card">
+                    <div class="card-title-row">
+                        <div class="card-title" data-i18n="lbl_vents">Vents</div>
+                        <div class="mode-wrap">
+                            <span class="mode-lbl" data-i18n="lbl_manual">Manual</span>
+                            <label class="toggle"><input type="checkbox" id="modeVents"><span
+                                    class="toggle-track"></span></label>
+                            <span class="mode-lbl" id="modeVentsLbl" data-i18n="lbl_auto">Auto</span>
+                        </div>
+                    </div>
+
+                    <!-- Состояние авто-автомата (только в авто) -->
+                    <div id="ventAutoStateRow"
+                        style="display:none;margin-bottom:10px;font-size:.78rem;color:var(--text-muted);text-align:center;">
+                        <span data-i18n="lbl_state">State</span>: <span id="ventAutoState"
+                            style="font-weight:600;color:var(--accent2);">IDLE</span>
+                        <span id="ventRainBadge" class="vent-badge closed" style="display:none;margin-left:8px"
+                            data-i18n="lbl_rain">Rain</span>
+                    </div>
+
+                    <!-- Полосы заполнения форточек (отображаются всегда) -->
+                    <div class="vent-bar-block">
+                        <div class="vent-bar-row">
+                            <span class="vent-bar-name" data-i18n="lbl_upper">Upper</span>
+                            <div class="vent-bar-bg">
+                                <div class="vent-bar-fill" id="vuBar"></div>
+                            </div>
+                            <span class="vent-bar-pct seg-val" id="vuPct">0%</span>
+                        </div>
+                        <div class="vent-bar-row">
+                            <span class="vent-bar-name" data-i18n="lbl_lower">Lower</span>
+                            <div class="vent-bar-bg">
+                                <div class="vent-bar-fill" id="vlBar"></div>
+                            </div>
+                            <span class="vent-bar-pct seg-val" id="vlPct">0%</span>
+                        </div>
+                    </div>
+
+                    <!-- Кнопки ручного режима OPEN / CLOSE (отображаются только в ручном) -->
+                    <div id="ventManualBtns" class="vent-manual-row">
+                        <button class="vent-btn vent-btn-open" id="vBtnOpen" data-i18n="btn_vent_open">OPEN</button>
+                        <button class="vent-btn vent-btn-close" id="vBtnClose" data-i18n="btn_vent_close">CLOSE</button>
+                    </div>
+
+                    <!-- Параметры авто-режима (только в авто): пороги -->
+                    <div id="ventsAuto" style="display:none">
+                        <div class="vent-thresh-grid">
+                            <div class="input-box"><input type="number" id="vTOpen" min="18" max="40" step="0.5"><label
+                                    data-i18n="lbl_temp_open">Open at, &deg;C</label></div>
+                            <div class="input-box"><input type="number" id="vTClose" min="10" max="35" step="0.5"><label
+                                    data-i18n="lbl_temp_close">Close at, &deg;C</label></div>
+                        </div>
+
+                    </div>
+
+                    <!-- Калибровка форточек (только в авто) -->
+                    <div id="ventsCalib" style="display:none;margin-top:18px">
+                        <div class="section-title" style="font-size:.75rem;margin-top:8px" data-i18n="lbl_calibration">
+                            Calibration (full travel time)</div>
+                        <div class="vent-calib-grid">
+                            <div class="input-box"><input type="number" id="vuTravel" min="1" max="120"><label
+                                    data-i18n="lbl_calib_top">Upper, sec</label></div>
+                            <div class="input-box"><input type="number" id="vlTravel" min="1" max="120"><label
+                                    data-i18n="lbl_calib_bottom">Lower, sec</label></div>
+                        </div>
+                        <div class="btn-center" style="margin-top:14px"><button class="btn-apply"
+                                onclick="applyVentAuto()" data-i18n="lbl_apply">Apply</button></div>
+
+                        <!-- v6.1: калибровочный прогон. Гонит створку на закрытие
+                             полное время хода с запасом, до упора, затем обнуляет
+                             расчётную позицию. Единственный способ убрать
+                             накопленный дрейф, не сбрасывая остальные настройки. -->
+                        <div class="section-title" style="font-size:.75rem;margin-top:18px"
+                            data-i18n="lbl_homing">Position reset</div>
+                        <div class="hint" style="font-size:.78rem;color:var(--text-muted);margin-bottom:8px"
+                            data-i18n="lbl_homing_hint">Closes the sash to the limit switch and resets the counter to
+                            zero. Use if the shown position no longer matches reality.</div>
+                        <div class="btn-row">
+                            <button class="btn-reset" onclick="ventHome('top')" id="btnHomeTop"
+                                data-i18n="btn_home_top">Reset upper</button>
+                            <button class="btn-reset" onclick="ventHome('bottom')" id="btnHomeBottom"
+                                data-i18n="btn_home_bottom">Reset lower</button>
+                        </div>
+                        <div id="homingStatus"
+                            style="display:none;margin-top:8px;font-size:.8rem;color:var(--accent2)">
+                            <span data-i18n="lbl_homing_run">Running…</span>
+                            <button class="btn-cal" onclick="ventHomeCancel()" style="margin-left:8px;padding:3px 8px"
+                                data-i18n="btn_home_cancel">Stop</button>
+                        </div>
+                    </div>
+                </section>
+                <section class="card">
+                    <div class="card-title-row">
+                        <div class="card-title" data-i18n="lbl_irrigation">Irrigation</div>
+                        <div class="mode-wrap"><span class="mode-lbl" data-i18n="lbl_manual">Manual</span><label
+                                class="toggle"><input type="checkbox" id="modeTimers"><span
+                                    class="toggle-track"></span></label><span class="mode-lbl" id="modeTimersLbl"
+                                data-i18n="lbl_auto">Auto</span></div>
+                    </div>
+                    <div class="timers-grid">
+                        <div class="timer-box">
+                            <div class="timer-header" data-i18n="lbl_irr1">Irrigation 1</div>
+                            <div class="auto-mode" style="display:none">
+                                <div class="input-box"><input type="time" id="start0"><label data-i18n="lbl_start">Start
+                                        time</label></div>
+                                <div class="input-box"><input type="number" id="dur0" min="1" max="240"><label
+                                        data-i18n="lbl_dur">Duration, min</label></div>
+                                <div class="input-box"><input type="number" id="int0" min="1" max="168"><label
+                                        data-i18n="lbl_interval">Interval, h</label></div>
+                                <div class="countdown" id="cd0"><span id="cd0H">--</span><span
+                                        class="seg-colon">:</span><span id="cd0M">--</span></div>
+                            </div>
+                            <div class="manual-mode"><button class="relay-btn off" id="rBtn0"
+                                    onclick="toggleRelay(0)">OFF</button></div>
+                        </div>
+                        <div class="timer-box">
+                            <div class="timer-header" data-i18n="lbl_irr2">Irrigation 2</div>
+                            <div class="auto-mode" style="display:none">
+                                <div class="input-box"><input type="time" id="start1"><label data-i18n="lbl_start">Start
+                                        time</label></div>
+                                <div class="input-box"><input type="number" id="dur1" min="1" max="240"><label
+                                        data-i18n="lbl_dur">Duration, min</label></div>
+                                <div class="input-box"><input type="number" id="int1" min="1" max="168"><label
+                                        data-i18n="lbl_interval">Interval, h</label></div>
+                                <div class="countdown" id="cd1"><span id="cd1H">--</span><span
+                                        class="seg-colon">:</span><span id="cd1M">--</span></div>
+                            </div>
+                            <div class="manual-mode"><button class="relay-btn off" id="rBtn1"
+                                    onclick="toggleRelay(1)">OFF</button></div>
+                        </div>
+                        <div class="timer-box">
+                            <div class="timer-header" data-i18n="lbl_irr3">Irrigation 3</div>
+                            <div class="auto-mode" style="display:none">
+                                <div class="input-box"><input type="time" id="start2"><label data-i18n="lbl_start">Start
+                                        time</label></div>
+                                <div class="input-box"><input type="number" id="dur2" min="1" max="240"><label
+                                        data-i18n="lbl_dur">Duration, min</label></div>
+                                <div class="input-box"><input type="number" id="int2" min="1" max="168"><label
+                                        data-i18n="lbl_interval">Interval, h</label></div>
+                                <div class="countdown" id="cd2"><span id="cd2H">--</span><span
+                                        class="seg-colon">:</span><span id="cd2M">--</span></div>
+                            </div>
+                            <div class="manual-mode"><button class="relay-btn off" id="rBtn2"
+                                    onclick="toggleRelay(2)">OFF</button></div>
+                        </div>
+                    </div>
+                    <div class="auto-mode btn-center" style="display:none;margin-top:10px"><button class="btn-apply"
+                            onclick="applyAllTimers()" style="padding:10px 32px" data-i18n="lbl_apply_irr">&#9881; Apply
+                            timer settings</button></div>
+                </section>
+                <section class="card">
+                    <div class="card-title-row">
+                        <div class="card-title" data-i18n="lbl_humidifier">Humidifier</div>
+                        <div class="mode-wrap"><span class="mode-lbl" data-i18n="lbl_manual">Manual</span><label
+                                class="toggle"><input type="checkbox" id="modeHumid"><span
+                                    class="toggle-track"></span></label><span class="mode-lbl" id="modeHumidLbl"
+                                data-i18n="lbl_auto">Auto</span></div>
+                    </div>
+                    <div id="humidAuto" style="display:none">
+                        <div class="vent-status-row" style="margin-bottom:10px">
+                            <div class="vent-status-item" style="flex:none"><span class="vent-name"
+                                    data-i18n="lbl_state">State</span><span id="humidBadge" class="vent-badge closed"
+                                    data-i18n="lbl_humid_off">Off</span></div>
+                        </div>
+                        <div style="display:flex;gap:10px">
+                            <div class="input-box" style="flex:1"><input type="number" id="hmH" min="50" max="100"
+                                    step="1"><label data-i18n="lbl_hum_off_pct">Off at humidity, %</label></div>
+                            <div class="input-box" style="flex:1"><input type="number" id="hmL" min="30" max="95"
+                                    step="1"><label data-i18n="lbl_hum_on_pct">On at humidity, %</label></div>
+                        </div>
+                        <div class="btn-center"><button class="btn-apply" onclick="applyHumidThresholds()"
+                                data-i18n="lbl_apply_hum">Apply</button></div>
+                    </div>
+                    <div id="humidManual"><button class="relay-btn off" id="rBtn7" onclick="toggleRelay(7)">OFF</button>
+                    </div>
+                </section>
+                <section class="card">
+                    <div class="card-title-row">
+                        <div class="card-title" data-i18n="lbl_water_tank">Water tank</div>
+                        <div class="mode-wrap"><span class="mode-lbl" data-i18n="lbl_manual">Manual</span><label
+                                class="toggle"><input type="checkbox" id="modePump"><span
+                                    class="toggle-track"></span></label><span class="mode-lbl" id="modePumpLbl"
+                                data-i18n="lbl_auto">Auto</span></div>
+                    </div>
+                    <div class="water-card-body">
+                        <div class="water-bar-container">
+                            <div class="water-bar-bg">
+                                <div class="water-bar-fill" id="waterBarFill"></div>
+                            </div>
+                            <div class="water-bar-label seg-val" id="waterBarLabel">--%</div>
+                        </div>
+                        <div class="water-info">
+                            <div class="vent-status-row" style="margin-bottom:10px">
+                                <div class="vent-status-item" style="flex:none"><span class="vent-name"
+                                        data-i18n="lbl_pump_state">Pump</span><span id="pumpBadge"
+                                        class="vent-badge closed" data-i18n="lbl_pump_off">Off</span></div>
+                            </div>
+                            <div id="pumpFaultWarn"
+                                style="display:none;padding:6px 10px;border-radius:7px;background:var(--off-bg);color:var(--off-col);font-size:.82rem;margin-bottom:10px;border:1px solid var(--off-brd);">
+                                &#9888; <span data-i18n="lbl_pump_fault">Pump fault — check sensor</span><button
+                                    class="btn-cal" onclick="pumpResetFault()" style="margin-left:6px;padding:3px 8px"
+                                    data-i18n="btn_reset_fault">Reset</button></div>
+                            <div id="pumpAuto" style="display:none">
+                                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+                                    <div class="input-box"><input type="number" id="wtLP" min="0" max="100"
+                                            step="1"><label data-i18n="lbl_pump_on_pct">On at, %</label></div>
+                                    <div class="input-box"><input type="number" id="wtHP" min="0" max="100"
+                                            step="1"><label data-i18n="lbl_pump_off_pct">Off at, %</label></div>
+                                    <div class="input-box"><input type="number" id="wtDp" min="10" max="500"
+                                            step="1"><label data-i18n="lbl_tank_depth">Depth, cm</label></div>
+                                    <div class="input-box"><input type="number" id="wtTm" min="1" max="120"
+                                            step="1"><label data-i18n="lbl_pump_timeout">Timeout, min</label></div>
+                                </div>
+                                <div class="btn-center"><button class="btn-apply" onclick="applyWaterCfg()"
+                                        data-i18n="lbl_apply_water">Apply</button></div>
+                            </div>
+                            <div id="pumpManual"><button class="relay-btn off" id="rBtn8"
+                                    onclick="toggleRelay(8)">OFF</button></div>
+                        </div>
+                    </div>
+                </section>
+                <section class="card chart-card">
+                    <div class="card-title" data-i18n="lbl_history">History (24 h)</div>
+                    <div class="chart-tabs"><button class="chart-tab active" onclick="showChart('temp',this)"
+                            data-i18n="tab_temp">Temperature</button><button class="chart-tab"
+                            onclick="showChart('hum',this)" data-i18n="tab_hum">Humidity</button><button
+                            class="chart-tab" onclick="showChart('press',this)"
+                            data-i18n="tab_press">Pressure</button><button class="chart-tab"
+                            onclick="showChart('water',this)" data-i18n="tab_water">Water</button></div>
+                    <div class="chart-canvas-wrap"><canvas id="histChart"></canvas>
+                        <div id="chartEmpty" class="chart-empty" data-i18n="chart_empty">Data accumulating... (updated
+                            every hour)</div>
+                    </div>
+                </section>
+            </main>
+            <div class="settings-view page-view" id="pageSettings" style="display:none">
+                <div id="statusBar" class="status-bar" style="display:none"></div>
+                <div class="settings-tabs-wrap" id="setTabsWrap"><nav class="settings-tabs" id="setTabs"><button class="set-tab active" onclick="showSettingsTab('network')"
+                        data-i18n="set_tab_network">Network</button><button class="set-tab"
+                        onclick="showSettingsTab('mqtt')" data-i18n="set_tab_mqtt">MQTT</button><button class="set-tab"
+                        onclick="showSettingsTab('creds')" data-i18n="set_tab_creds">Access</button><button
+                        class="set-tab" onclick="showSettingsTab('ntp')" data-i18n="set_tab_ntp">Time</button><button
+                        class="set-tab" onclick="showSettingsTab('ui')" data-i18n="set_tab_ui">Interface</button><button
+                        class="set-tab" onclick="showSettingsTab('ota')" data-i18n="set_tab_ota">Update</button><button
+                        class="set-tab" onclick="showSettingsTab('system')" data-i18n="set_tab_system">System</button>
+                </nav></div>
+                <div class="card settings-card">
+                    <div class="set-pane active" data-pane="network">
+                        <div class="section-title" data-i18n="set_wifi">Wi-Fi parameters</div>
+                        <div class="input-box"><input type="text" id="ssid" autocomplete="off" spellcheck="false"
+                                placeholder=" "><label data-i18n="set_ssid">SSID (network name)</label></div>
+                        <div class="input-box pass-wrap"><input type="password" id="wPas" autocomplete="new-password"
+                                placeholder=" "><label data-i18n="set_wpass">Wi-Fi password (empty = keep
+                                current)</label><button type="button" class="pass-eye"
+                                onclick="togglePass('wPas')">&#128065;</button></div>
+                        <div class="btn-row"><button class="btn-reset" onclick="scanWifi()"
+                                data-i18n="set_wifi_scan">Scan networks</button></div>
+                        <div id="wifiScanList" style="display:none;margin-top:8px;"></div>
+                        <hr class="set-hr">
+                        <div class="section-title" data-i18n="set_ip_mode">IP mode</div>
+                        <div class="dhcp-row"><span class="dhcp-lbl" id="lblDHCP" data-i18n="set_dhcp">DHCP
+                                (auto)</span><label class="toggle"><input type="checkbox" id="modeSwitch"
+                                    onchange="onDhcpModeChange()"><span class="toggle-track"></span></label><span
+                                class="dhcp-lbl" id="lblStatic" data-i18n="set_static">Static</span></div>
+                        <div id="dhcpHint" class="dhcp-hint" data-i18n="set_dhcp_hint">Controller receives address
+                            automatically from the router.</div>
+                        <div id="staticFields" style="display:none">
+                            <div class="form-grid">
+                                <div class="input-box"><input type="text" id="ipAddr" inputmode="decimal"
+                                        placeholder="192.168.1.100"><label data-i18n="set_ip">IP address</label></div>
+                                <div class="input-box"><input type="text" id="subnet" inputmode="decimal"
+                                        placeholder="255.255.255.0"><label data-i18n="set_mask">Subnet mask</label>
+                                </div>
+                                <div class="input-box"><input type="text" id="gateway" inputmode="decimal"
+                                        placeholder="192.168.1.1"><label data-i18n="set_gw">Gateway</label></div>
+                                <div class="input-box"><input type="text" id="dns1" inputmode="decimal"
+                                        placeholder="8.8.8.8"><label>DNS 1</label></div>
+                                <div class="input-box"><input type="text" id="dns2" inputmode="decimal"
+                                        placeholder="8.8.4.4"><label>DNS 2</label></div>
+                            </div>
+                        </div>
+                        <div class="btn-row"><button class="btn-apply" onclick="applyNet()"
+                                data-i18n="set_apply_net">Apply &amp; reboot</button><button class="btn-reset"
+                                onclick="loadNetSettings()" data-i18n="set_refresh">Reload</button><button
+                                class="btn-reset" onclick="resetWifi()"
+                                style="border-color:var(--off-brd);color:var(--off-col)"
+                                data-i18n="set_forget_wifi">Forget Wi-Fi</button></div>
+                        <p class="warn-note" data-i18n="set_reboot_warn">&#9888; Controller will reboot after apply (~10
+                            sec)</p>
+                    </div>
+                    <div class="set-pane" data-pane="mqtt">
+                        <div class="section-title" data-i18n="set_mqtt_title">MQTT (Home Assistant / Node-RED)</div>
+                        <div class="dhcp-row"><span class="dhcp-lbl" data-i18n="set_mqtt_enable">Enable
+                                MQTT</span><label class="toggle"><input type="checkbox" id="mqttEnable"><span
+                                    class="toggle-track"></span></label><span id="mqttStatusDot"
+                                style="font-size:.75rem;color:var(--text-muted);margin-left:4px;"
+                                data-i18n="set_mqtt_disabled">off</span></div>
+                        <div class="input-box"><input type="text" id="mqttServer" autocomplete="off" spellcheck="false"
+                                placeholder="192.168.1.50"><label data-i18n="set_mqtt_server">MQTT server (IP or
+                                hostname)</label></div>
+                        <div class="form-grid">
+                            <div class="input-box"><input type="number" id="mqttPort" min="1" max="65535"
+                                    value="1883"><label data-i18n="set_mqtt_port">Port</label></div>
+                            <div class="input-box"><input type="text" id="mqttUser" autocomplete="off"
+                                    placeholder=" "><label data-i18n="set_mqtt_user">User (empty = no auth)</label>
+                            </div>
+                        </div>
+                        <div class="input-box pass-wrap"><input type="password" id="mqttPass"
+                                autocomplete="new-password" placeholder=" "><label data-i18n="set_mqtt_pass">MQTT
+                                password (empty = keep)</label><button type="button" class="pass-eye"
+                                onclick="togglePass('mqttPass')">&#128065;</button></div>
+                        <div class="btn-row"><button class="btn-apply" onclick="applyMqtt()"
+                                data-i18n="set_mqtt_apply">Save MQTT</button><button class="btn-reset"
+                                onclick="loadMqttSettings()" data-i18n="set_refresh">Reload</button><button
+                                class="btn-reset" onclick="mqttResendDiscovery()" data-i18n="set_mqtt_resend">Re-publish
+                                discovery</button></div>
+                        <div id="mqttStatusDetail" style="font-size:.78rem;color:var(--text-muted);margin-top:8px;">
+                        </div>
+                    </div>
+                    <div class="set-pane" data-pane="creds">
+                        <div class="section-title" data-i18n="set_webaccess">Web panel access</div>
+                        <div class="input-box"><input type="text" id="wbUser" autocomplete="off" placeholder=" "><label
+                                data-i18n="set_login">Login</label></div>
+                        <div class="input-box pass-wrap"><input type="password" id="wbPass" autocomplete="new-password"
+                                placeholder=" "><label data-i18n="set_password">Password</label><button type="button"
+                                class="pass-eye" onclick="togglePass('wbPass')">&#128065;</button></div>
+                        <div class="btn-row"><button class="btn-apply" onclick="applyWebCreds()"
+                                data-i18n="set_save_creds">Save credentials</button></div>
+                        <p class="warn-note" data-i18n="set_creds_warn">&#9888; You will need to re-login after change
+                        </p>
+                    </div>
+                    <div class="set-pane" data-pane="ntp">
+                        <div class="section-title" data-i18n="set_ntp_title">Time synchronization (NTP)</div>
+                        <div class="input-box"><input type="text" id="ntpServer" autocomplete="off" spellcheck="false"
+                                placeholder="pool.ntp.org"><label data-i18n="set_ntp_server">NTP server address</label>
+                        </div>
+                        <div class="input-box" style="margin-top:10px"><select id="ntpTzSel" onchange="onTzSelChange()">
+                                <option value="UTC-12" data-posix="UTC+12">UTC-12</option>
+                                <option value="UTC-11" data-posix="UTC+11">UTC-11</option>
+                                <option value="UTC-10" data-posix="UTC+10">UTC-10</option>
+                                <option value="UTC-9" data-posix="UTC+9">UTC-9</option>
+                                <option value="UTC-8" data-posix="UTC+8">UTC-8</option>
+                                <option value="UTC-7" data-posix="UTC+7">UTC-7</option>
+                                <option value="UTC-6" data-posix="UTC+6">UTC-6</option>
+                                <option value="UTC-5" data-posix="UTC+5">UTC-5</option>
+                                <option value="UTC-4" data-posix="UTC+4">UTC-4</option>
+                                <option value="UTC-3" data-posix="UTC+3">UTC-3</option>
+                                <option value="UTC-2" data-posix="UTC+2">UTC-2</option>
+                                <option value="UTC-1" data-posix="UTC+1">UTC-1</option>
+                                <option value="UTC+0" data-posix="UTC0">UTC+0</option>
+                                <option value="UTC+1" data-posix="UTC-1">UTC+1</option>
+                                <option value="UTC+2" data-posix="UTC-2">UTC+2</option>
+                                <option value="MSK" data-posix="MSK-3">UTC+3 (Moscow)</option>
+                                <option value="UTC+4" data-posix="UTC-4">UTC+4</option>
+                                <option value="UTC+5" data-posix="UTC-5">UTC+5</option>
+                                <option value="UTC+6" data-posix="UTC-6">UTC+6</option>
+                                <option value="UTC+7" data-posix="UTC-7">UTC+7</option>
+                                <option value="UTC+8" data-posix="UTC-8">UTC+8</option>
+                                <option value="UTC+9" data-posix="UTC-9">UTC+9</option>
+                                <option value="UTC+10" data-posix="UTC-10">UTC+10</option>
+                                <option value="UTC+11" data-posix="UTC-11">UTC+11</option>
+                                <option value="UTC+12" data-posix="UTC-12">UTC+12</option>
+                            </select><label data-i18n="set_ntp_tz">Timezone</label></div>
+                        <div class="input-box" style="margin-top:10px"><select id="ntpUpdateSel">
+                                <option value="1">1 h</option>
+                                <option value="2">2 h</option>
+                                <option value="3">3 h</option>
+                                <option value="4" selected>4 h</option>
+                                <option value="5">5 h</option>
+                                <option value="6">6 h</option>
+                                <option value="8">8 h</option>
+                                <option value="12">12 h</option>
+                                <option value="24">24 h</option>
+                            </select><label data-i18n="set_ntp_interval">Sync interval</label></div>
+                        <div class="btn-row" style="margin-top:12px"><button class="btn-apply" onclick="applyNtp()"
+                                data-i18n="set_ntp_apply">Save NTP</button></div>
+                        <div id="ntpStatus" style="font-size:.78rem;color:var(--text-muted);margin-top:8px;"></div>
+                    </div>
+                    <div class="set-pane" data-pane="ui">
+                        <div class="section-title" data-i18n="set_ui_title">Interface</div>
+                        <div class="theme-section"><span class="theme-sel-lbl" data-i18n="set_theme">Color
+                                theme</span>
+                            <div class="theme-tiles" id="themeTiles" role="radiogroup">
+                            <button type="button" class="theme-tile" role="radio" aria-checked="true" data-theme-val=""
+                                    onclick="applyThemeAndSave('')"><span class="theme-swatch tsw-green"><i></i><i></i><i></i></span><span class="theme-tile-name" data-i18n="theme_green">Green</span></button>
+                            <button type="button" class="theme-tile" role="radio" aria-checked="false" data-theme-val="beige"
+                                    onclick="applyThemeAndSave('beige')"><span class="theme-swatch tsw-beige"><i></i><i></i><i></i></span><span class="theme-tile-name" data-i18n="theme_beige">Beige</span></button>
+                            <button type="button" class="theme-tile" role="radio" aria-checked="false" data-theme-val="night"
+                                    onclick="applyThemeAndSave('night')"><span class="theme-swatch tsw-night"><i></i><i></i><i></i></span><span class="theme-tile-name" data-i18n="theme_night">Night</span></button>
+                            <button type="button" class="theme-tile" role="radio" aria-checked="false" data-theme-val="win98"
+                                    onclick="applyThemeAndSave('win98')"><span class="theme-swatch tsw-win98"><i></i><i></i><i></i></span><span class="theme-tile-name" data-i18n="theme_win98">Light gray</span></button>
+                            <button type="button" class="theme-tile" role="radio" aria-checked="false" data-theme-val="skyblue"
+                                    onclick="applyThemeAndSave('skyblue')"><span class="theme-swatch tsw-blue"><i></i><i></i><i></i></span><span class="theme-tile-name" data-i18n="theme_blue">Sky blue</span></button>
+                            <button type="button" class="theme-tile" role="radio" aria-checked="false" data-theme-val="brown"
+                                    onclick="applyThemeAndSave('brown')"><span class="theme-swatch tsw-brown"><i></i><i></i><i></i></span><span class="theme-tile-name" data-i18n="theme_brown">Brown</span></button>
+                            </div></div>
+                        <div class="theme-section" style="margin-top:10px"><span class="theme-sel-lbl">&#127760; <span
+                                    data-i18n="set_lang">Interface language</span></span><select id="langSel"
+                                class="theme-select" onchange="applyLangAndSave(this.value)">
+                                <option value="en">&#127468;&#127463; English</option>
+                                <option value="ru">&#127479;&#127482; Русский</option>
+                            </select></div>
+                    </div>
+                    <div class="set-pane" data-pane="ota">
+                        <div class="section-title" data-i18n="set_ota_title">Firmware update</div>
+                        <p class="hint" style="margin-bottom:10px;font-size:.85rem;color:var(--text-muted)"
+                            data-i18n="ota_hint">Upload a single file <code>greenhouse_vX.Y.bin</code> (firmware +
+                            filesystem container). The controller will reboot automatically after update.</p>
+                        <div class="ota-file-row"><input type="file" id="otaFile" accept=".bin"
+                                onchange="otaValidateFile()" style="display:none"><label for="otaFile" class="btn-file"
+                                data-i18n="set_ota_choose">Choose file</label><span id="otaFileName"
+                                class="ota-file-name" data-i18n="set_ota_no_file">No file chosen</span></div>
+                        <div id="otaDetected" style="font-size:.82rem;color:var(--text-muted);margin:8px 0 10px;"></div>
+                        <div id="otaProgress" class="progress" style="display:none">
+                            <div id="otaBar" class="progress-bar"></div><span id="otaText">0%</span>
+                        </div>
+                        <div class="btn-row"><button class="btn-apply" id="btnOtaUpload" onclick="otaUpload()" disabled
+                                data-i18n="set_ota_upload">Upload</button></div>
+                        <p class="hint" style="margin-top:10px;"><span data-i18n="set_ota_current">Current
+                                version:</span> <span id="fwVersion">—</span></p>
+                    </div>
+                    <div class="set-pane" data-pane="system">
+                        <div class="section-title" data-i18n="set_sys_title">System operations</div>
+                        <div class="btn-row" style="flex-direction:column;align-items:stretch;gap:8px;max-width:380px">
+                            <button class="btn-apply" onclick="sysReboot()" data-i18n="set_sys_reboot">Reboot
+                                ESP32</button><button class="btn-reset" onclick="sysClearHistory()"
+                                data-i18n="set_sys_clear_hist">Clear history</button><button class="btn-reset"
+                                style="border-color:var(--off-brd);color:var(--off-col)" onclick="sysFactoryReset()"
+                                data-i18n="set_sys_factory">Factory reset</button></div>
+                        <hr class="set-hr">
+                        <div class="section-title" data-i18n="set_sys_info">Information</div>
+                        <div class="info-grid">
+                            <div><span class="info-k" data-i18n="info_fw">Firmware:</span> <span class="info-v"
+                                    id="infoFw">—</span></div>
+                            <div><span class="info-k" data-i18n="info_ip">IP address:</span> <span class="info-v"
+                                    id="infoIp">—</span></div>
+                            <div><span class="info-k" data-i18n="info_mac">MAC:</span> <span class="info-v"
+                                    id="infoMac">—</span></div>
+                            <div><span class="info-k" data-i18n="info_uptime">Uptime:</span> <span class="info-v"
+                                    id="infoUptime">—</span></div>
+                            <div><span class="info-k" data-i18n="info_heap">Free heap:</span> <span class="info-v"
+                                    id="infoHeap">—</span></div>
+                            <div><span class="info-k" data-i18n="info_rssi">Wi-Fi RSSI:</span> <span class="info-v"
+                                    id="infoRssi">—</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="aboutModal" class="modal" role="dialog" aria-modal="true">
+        <div class="modal-box"><button class="modal-close" onclick="closeAbout()">&#10005;</button>
+            <div class="modal-logo">&#11044;</div>
+            <h2 data-i18n="about_title">Smart Greenhouse</h2>
+            <!-- Номер версии НЕ вписывать сюда руками: он приходит от
+                 контроллера в поле fwVersion и подставляется в #aboutVersion.
+                 Раньше строка была захардкожена и отстала на два релиза. -->
+            <p class="about-version"><span data-i18n="about_version">Version</span>
+                <span id="aboutVersion">—</span> &bull; ESP32</p>
+            <p class="about-desc" data-i18n="about_desc">Greenhouse automation: irrigation, ventilation, humidification,
+                water tank.<br>Real-time monitoring (BME280, DHT22, BH1750, AJ-SR04M).</p>
+            <hr class="about-hr">
+            <p class="about-author" data-i18n="about_author">&copy; Sergey Saidov</p>
+            <p class="about-email"><a href="mailto:40user40@gmail.com">40user40@gmail.com</a></p>
+        </div>
+    </div>
+    <div id="aboutOverlay" class="modal-overlay" onclick="closeAbout()"></div>
+    <div class="offline-overlay" id="offlineOverlay">
+        <div class="offline-icon">&#128268;</div>
+        <div class="offline-title" data-i18n="offline_title">Controller unavailable</div>
+        <div class="offline-sub" data-i18n="offline_sub">No connection to ESP32. Page loaded from cache.<br>Check
+            controller power.</div><button class="offline-btn" onclick="location.reload()"
+            data-i18n="offline_btn">&#8635; Reload page</button>
+    </div>
+    <div id="toastContainer"></div>
+    <div class="ws-spinner" id="wsSpinner"></div>
+    <script src="/app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,14 @@
+# Custom partition table for Greenhouse v6.1 (ESP32 4MB flash):
+#   app0, app1 = 1728 KB each (OTA dual-app for firmware updates)
+#   spiffs     = 576 KB (frontend: HTML/CSS/JS + banner + GIF + font + reserve)
+#
+# v6.1 CHANGE: spiffs increased from 256 KB to 576 KB.
+# WARNING: when partition layout changes, the FIRST flash MUST be done via
+# USB (PlatformIO Upload, not web OTA). Web OTA uses the existing partition
+# table and cannot apply a new one. After USB upload, web OTA works again.
+# Name,   Type, SubType, Offset,   Size,     Flags
+nvs,      data, nvs,     0x9000,   0x5000,
+otadata,  data, ota,     0xe000,   0x2000,
+app0,     app,  ota_0,   0x10000,  0x1B0000,
+app1,     app,  ota_1,   0x1C0000, 0x1B0000,
+spiffs,   data, spiffs,  0x370000, 0x90000,
