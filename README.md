@@ -114,7 +114,7 @@ greenhouse keeps running on its last settings.
 **🔄 Updates**
 - Single file through the web panel
 - Over the air straight from VS Code
-- Dual partitions: rollback on failure
+- Two app partitions, checksum before flashing
 
 </td></tr>
 </table>
@@ -129,7 +129,7 @@ greenhouse keeps running on its last settings.
 |---|---|
 | I²C — BME280 `0x76` and BH1750 `0x23` | `21` SDA, `22` SCL |
 | DHT22 — outdoor temperature and humidity | `13` |
-| YL-83 rain sensor | `39` |
+| YL-83 rain sensor — **analog** AO | `36` (ADC1_CH0) |
 | AJ-SR04M ultrasonic | `0` TRIG, `34` ECHO |
 | Irrigation 1 / 2 / 3 | `25`, `26`, `27` |
 | Upper vent: open / close | `32`, `4` |
@@ -138,7 +138,19 @@ greenhouse keeps running on its last settings.
 | Well pump | `5` |
 | Irrigation buttons 1 / 2 / 3 | `18`, `17`, `16` |
 | Vent Open / Close buttons | `23`, `19` |
+| Humidifier button | `35` |
+| Pump button | `39` |
 | Heartbeat LED | `2` |
+
+The full board-level layout, ready to print on A4 (landscape), is in
+[`docs/GPIO_ESP32.xlsx`](docs/GPIO_ESP32.xlsx) — Russian version:
+[`docs/GPIO_ESP32.ru.xlsx`](docs/GPIO_ESP32.ru.xlsx).
+
+> [!CAUTION]
+> **GPIO12 is deliberately left unused.** It is the strapping pin that
+> selects flash voltage: held high at reset, the chip switches to 1.8 V
+> flash mode, which on this board's 3.3 V flash means a failed boot or a
+> damaged chip. Do not hang a relay or a button on it.
 
 Pins are configured in [`include/config.h`](include/config.h) and nowhere else.
 
@@ -156,6 +168,27 @@ Pins are configured in [`include/config.h`](include/config.h) and nowhere else.
 > AJ-SR04M ECHO ──┬── 1 kΩ ──── GPIO34
 >                 └── 2 kΩ ──── GND
 > ```
+
+> [!WARNING]
+> **Pull-ups on the button pins GPIO35 and GPIO39.** GPIO34–39 on the
+> ESP32 are input-only and have **no internal pull resistors** —
+> `INPUT_PULLUP` is a silent no-op there. Without an external pull-up the
+> pin floats and the button fires on its own.
+>
+> ```
+> 3.3V ──[ 10 kΩ ]──┬────────── GPIO35 / GPIO39
+>                   │
+>                 [button] ║ 100 nF   (in parallel)
+>                   │      ║
+>                  GND    GND
+> ```
+>
+> The 100 nF gives an RC of 10 kΩ × 100 nF = 1 ms: a hardware debounce
+> and, more usefully in a greenhouse, a filter against the interference
+> the eight motor relays throw at long button cables.
+>
+> Since v6.2 the rain sensor is analog on GPIO36 and needs no pull-up of
+> its own — the module's AO drives the line.
 
 Relays must be **HIGH-active** opto-isolated modules. The vent relay pairs form
 an H-bridge; switching both relays of a pair on at once is blocked in firmware.
@@ -474,6 +507,16 @@ memory.
 ---
 
 ## 9. 🔄 Firmware updates
+
+> [!NOTE]
+> **What is and is not protected.** The container carries a CRC32 for
+> each part, and the firmware is written into the spare app partition,
+> so a failed or corrupted upload leaves the running version untouched.
+> There is **no rollback after a successful flash**: the project does
+> not call `esp_ota_mark_app_valid_cancel_rollback()`, and the
+> bootloader's rollback support is not enabled in this build. If a
+> freshly flashed firmware boots and then panics, the controller will
+> keep rebooting into it — recover over USB.
 
 ### 9.1 Through the web panel — recommended
 

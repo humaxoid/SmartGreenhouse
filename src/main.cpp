@@ -136,8 +136,27 @@ static void taskCore1(void* /*param*/) {
         // До v6.1 флаг isUpdating() не проверялся вообще нигде.
         if (!OtaMgr::isUpdating()) {
             // ── Контроллеры (используют свежие данные датчиков) ──
-            float temp = !isnan(snap.bmeTemp) ? snap.bmeTemp : snap.dhtTemp;
-            float hum  = !isnan(snap.bmeHum)  ? snap.bmeHum  : snap.dhtHum;
+            //
+            // v6.2: управляем ТОЛЬКО по внутреннему BME280. Раньше при его
+            // отказе подставлялся DHT22, а он висит СНАРУЖИ теплицы — это
+            // разные величины, и подмена уводила автоматику в другую сторону:
+            // в жару снаружи +17 при +31 внутри форточки начали бы
+            // закрываться, а увлажнитель управлялся бы уличной влажностью.
+            // Без внутреннего датчика правильнее замереть: VentCtrl при
+            // NaN удерживает позицию, HumidCtrl выключает увлажнитель.
+            // Дождь и уровень воды на BME280 не завязаны и работают всегда.
+            const float temp = snap.bmeTemp;
+            const float hum  = snap.bmeHum;
+
+            static bool s_bmeLost = false;
+            if (isnan(temp) && !s_bmeLost) {
+                s_bmeLost = true;
+                Serial.println(F("[BOOT] BME280 lost — vent/humidity control on hold "
+                                 "(outdoor DHT22 is NOT a substitute)"));
+            } else if (!isnan(temp) && s_bmeLost) {
+                s_bmeLost = false;
+                Serial.println(F("[BOOT] BME280 back — control resumed"));
+            }
 
             // v6.0: VentCtrl сам читает modeVents через settings, передаём только данные
             bool ventsAuto = false;
@@ -276,7 +295,6 @@ void setup() {
 
     // ── 3. Настройки + runtime форточек ──────────────────────────
     settingsLoad();
-    // v6.0: ventRuntimeInit убран — VentCtrl::init() инициализирует сам
 
     // ── 4. Восстановление состояний одиночных реле ───────────────
     // (Реле форточек НЕ восстанавливаются — они всегда стартуют в OFF,
@@ -294,10 +312,33 @@ void setup() {
     // ── 7. Network manager (только регистрация event handler) ────
     NetMgr::init();
 
-    // ── 8. ★ КЛЮЧЕВАЯ РАЗВИЛКА ★ ──────────────────────────────
+    // ── 8. Watchdog и управляющая задача ─────────────────────────
+    // v6.2: подняты СЮДА, выше развилки provisioning. Раньше taskCore1
+    // создавалась предпоследним шагом, и это давало два провала:
+    //   • в режиме первоначальной настройки setup() уходил в WifiProv и
+    //     не возвращался — автоматика не работала вообще, форточки не
+    //     закрывались по дождю всё время, пока владелец настраивает Wi-Fi;
+    //   • при обычном старте подключение к сети занимает до 30 секунд,
+    //     и всё это время теплица тоже была без управления.
+    //
+    // Всё, к чему обращается taskCore1 и что ещё не поднято, к вызовам
+    // без инициализации готово: HistoryLogger и TimerSched выходят по
+    // флагу «времени нет», MqttMgr только ставит атомарный бит,
+    // WsHandler::notify* — пустышки, OtaMgr::isUpdating() читает статик.
+    esp_task_wdt_init(WDT_TIMEOUT_SEC, true);
+    esp_task_wdt_add(NULL);              // сюда же loopTask
+
+    xTaskCreatePinnedToCore(
+        taskCore1, "core1_main", TASK_CORE1_STACK, nullptr,
+        TASK_CORE1_PRIORITY, nullptr, 1);
+    Serial.printf("[BOOT] Core1 task started (stack=%u, prio=%u)\n",
+        (unsigned)TASK_CORE1_STACK, (unsigned)TASK_CORE1_PRIORITY);
+
+    // ── 9. ★ КЛЮЧЕВАЯ РАЗВИЛКА ★ ──────────────────────────────
     // Если нет Wi-Fi кредов в NVS — запускаем provisioning mode
     // и НЕ возвращаемся из setup() в обычный режим (прошивка крутится
     // в loop(), ждёт пока пользователь настроит Wi-Fi через AP).
+    // Автоматика теплицы при этом уже работает — см. шаг 8.
     if (!NetMgr::hasCredentials()) {
         Serial.println(F("[BOOT] No WiFi credentials — starting AP provisioning"));
         WifiProv::start(WIFI_AP_SSID_PREFIX, WIFI_AP_PASSWORD);
@@ -341,24 +382,7 @@ void setup() {
     // ── 14. История ──────────────────────────────────────────────
     HistoryLogger::init();
 
-    // ── 15. Task Watchdog Timer (IWDT уже включён в sdkconfig) ───
-    // TWDT следит за подвисшими задачами. Настраиваем 30 сек.
-    esp_task_wdt_init(WDT_TIMEOUT_SEC, true);
-    // Добавляем loop task (Arduino loop) под TWDT
-    esp_task_wdt_add(NULL);
-
-    // ── 16. Задача Core 1 (основная логика) ──────────────────────
-    xTaskCreatePinnedToCore(
-        taskCore1,
-        "core1_main",
-        TASK_CORE1_STACK,
-        nullptr,
-        TASK_CORE1_PRIORITY,
-        nullptr,
-        1   // Core 1
-    );
-    Serial.printf("[BOOT] Core1 task started (stack=%u, prio=%u)\n",
-        (unsigned)TASK_CORE1_STACK, (unsigned)TASK_CORE1_PRIORITY);
+    // Watchdog и задача Core 1 подняты выше, на шаге 8.
 
     Serial.println(F("[BOOT] Setup complete"));
 }

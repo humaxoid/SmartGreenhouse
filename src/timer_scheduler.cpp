@@ -151,13 +151,22 @@ static void startTimer(uint8_t idx, time_t startUnix, uint64_t nowMs) {
     s_rt[idx].lastStartUnix = startUnix;
 
     // Сохраняем в NVS немедленно (для восстановления после ребута)
+    // v6.2: settingsSave() пишет во flash и делает это ВНЕ мьютекса.
+    // Раньше вызов стоял внутри блока с g_settingsMutex, а RelayMgr::
+    // setRelayDirect() ждёт тот же мьютекс всего 20 мс. Запись в NVS
+    // легко превышает этот срок, и тогда учёт состояния реле молча
+    // терялся: GPIO переключён, а g_settings.relayState[] — нет, и
+    // панель с MQTT показывали неправду. Мьютекс нужен только для
+    // изменения поля; сама запись в нём не нуждается.
+    bool needSave = false;
     {
         MutexGuard lock(g_settingsMutex, pdMS_TO_TICKS(50));
         if (lock.locked()) {
             g_settings.timerActiveStartSec[idx] = (int32_t)startUnix;
-            settingsSave();   // НЕ deferred — нужно прямо сейчас
+            needSave = true;
         }
     }
+    if (needSave) settingsSave();   // НЕ deferred — нужно прямо сейчас
 
     uint8_t relay = relayIdxForTimer(idx);
     RelayMgr::setRelay(relay, true);
@@ -173,13 +182,15 @@ static void stopTimer(uint8_t idx) {
     s_rt[idx].startUnix = 0;
     s_rt[idx].startMs   = 0;
 
+    bool needSave = false;
     {
         MutexGuard lock(g_settingsMutex, pdMS_TO_TICKS(50));
         if (lock.locked()) {
             g_settings.timerActiveStartSec[idx] = -1;
-            settingsSave();
+            needSave = true;
         }
     }
+    if (needSave) settingsSave();   // см. комментарий в startTimer()
 
     uint8_t relay = relayIdxForTimer(idx);
     RelayMgr::setRelay(relay, false);

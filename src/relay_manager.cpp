@@ -129,7 +129,7 @@ void RelayMgr::init() {
 void RelayMgr::restoreFromSettings() {
     // Восстанавливаем только ОДИНОЧНЫЕ реле (полив, увлажнитель, насос).
     // Реле форточек (H-bridge) всегда стартуют в OFF — позиция
-    // восстанавливается через g_ventRuntime, а движение (если нужно)
+    // восстанавливается VentCtrl::init() из NVS, а движение (если нужно)
     // задаст контроллер по температуре.
     MutexGuard lock(g_settingsMutex, pdMS_TO_TICKS(200));
     if (!lock.locked()) {
@@ -200,6 +200,38 @@ bool RelayMgr::setRelay(uint8_t idx, bool on) {
     if (!lock.locked()) return false;
 
     return doGpio(idx, on);
+}
+
+void RelayMgr::forceOff(uint8_t idx) {
+    if (idx >= NUM_RELAYS) return;
+
+    // GPIO гасим ПЕРВЫМ делом и без всяких условий. Всё остальное —
+    // бухгалтерия, которая не должна стоять между аварией и обесточиванием.
+    digitalWrite(RELAY_PINS[idx], LOW);
+    s_lastToggleMs[idx] = steadyMs();
+
+    // Если это реле форточки — отменяем отложенное включение, иначе
+    // updatePending() через 100 мс добросовестно включит его обратно.
+    for (uint8_t v = 0; v < NUM_VENTS; v++) {
+        if (s_pending[v].active && s_pending[v].relayIdx == idx) {
+            s_pending[v] = {false, 0, 0};
+        }
+    }
+
+    MutexGuard lock(g_settingsMutex, pdMS_TO_TICKS(20));
+    if (!lock.locked()) {
+        // Учёт не обновился — но реле уже обесточено, а состояние
+        // поправится при следующем штатном переключении.
+        Serial.printf("[RELAY] FORCE OFF %s (state not recorded: mutex busy)\n",
+            RELAY_NAMES[idx]);
+        return;
+    }
+    if (g_settings.relayState[idx]) {
+        g_settings.relayState[idx] = false;
+        Serial.printf("[RELAY] FORCE OFF %s\n", RELAY_NAMES[idx]);
+        if (!isVentRelay(idx)) settingsSaveDeferred();
+        MqttMgr::publishRelayState(idx);
+    }
 }
 
 bool RelayMgr::getState(uint8_t idx) {
@@ -277,9 +309,26 @@ bool RelayMgr::moveVent(uint8_t ventIdx, VentDirection dir) {
         return true;
     }
 
-    // ── Шаг 2 (немедленно): включаем нужное реле ─────────────────
-    // Противоположное уже выключено, так что interlock выполнен.
+    // ── Шаг 2: включаем нужное реле ──────────────────────────────
+    // v6.2: противоположное реле уже выключено — но, возможно, только что.
+    // Контакты отпускают 5–10 мс, поэтому смотрим не на состояние, а на
+    // время последнего переключения. Без этой проверки последовательность
+    // stopVent() → moveVent() в одном тике (а так делают и калибровочный
+    // прогон, и приоритетное закрытие в авто-режиме) давала бы ровно то
+    // перекрытие, ради устранения которого всё и затевалось.
     if (targetOn != 0xFF && !g_settings.relayState[targetOn]) {
+        if (targetOff != 0xFF) {
+            const uint64_t offAt = s_lastToggleMs[targetOff];
+            if (offAt != 0 && now < offAt + HBRIDGE_BREAK_BEFORE_MAKE_MS) {
+                s_pending[ventIdx] = {
+                    true, targetOn, offAt + HBRIDGE_BREAK_BEFORE_MAKE_MS
+                };
+                Serial.printf("[HBRIDGE] Vent #%u: %s ON deferred, %llu ms of dead-time left\n",
+                    (unsigned)ventIdx, RELAY_NAMES[targetOn],
+                    (unsigned long long)(offAt + HBRIDGE_BREAK_BEFORE_MAKE_MS - now));
+                return true;
+            }
+        }
         doGpio(targetOn, true);
     }
 
@@ -287,6 +336,13 @@ bool RelayMgr::moveVent(uint8_t ventIdx, VentDirection dir) {
     s_pending[ventIdx] = {false, 0, 0};
 
     return true;
+}
+
+uint32_t RelayMgr::ventStartDelayMs(uint8_t ventIdx, uint64_t nowMs) {
+    if (ventIdx >= NUM_VENTS)        return 0;
+    if (!s_pending[ventIdx].active)  return 0;
+    const uint64_t fire = s_pending[ventIdx].fireAtMs;
+    return (nowMs < fire) ? (uint32_t)(fire - nowMs) : 0;
 }
 
 bool RelayMgr::stopVent(uint8_t ventIdx) {
@@ -303,14 +359,16 @@ bool RelayMgr::stopVent(uint8_t ventIdx) {
 
     // Оба реле в OFF. Для стопа break-before-make НЕ НУЖЕН
     // (нет перекрытия — это безопасное состояние).
-    bool changed = false;
-    if (g_settings.relayState[openIdx])  { doGpio(openIdx, false);  changed = true; }
-    if (g_settings.relayState[closeIdx]) { doGpio(closeIdx, false); changed = true; }
+    if (g_settings.relayState[openIdx])  doGpio(openIdx, false);
+    if (g_settings.relayState[closeIdx]) doGpio(closeIdx, false);
 
     // Отменяем pending операцию (если была)
     s_pending[ventIdx] = {false, 0, 0};
 
-    return changed;
+    // v6.2: возвращаем УСПЕХ, а не «что-то изменилось». Раньше здесь был
+    // флаг changed, и вызывающий не мог отличить «уже стояло» от «мьютекс
+    // занят, ничего не сделано» — оба давали false.
+    return true;
 }
 
 VentDirection RelayMgr::getVentDirection(uint8_t ventIdx) {
@@ -383,21 +441,3 @@ void RelayMgr::updateHeartbeat(uint64_t nowMs) {
 // ═══════════════════════════════════════════════════════════════════
 //  v6.0: ПРЯМОЕ управление реле (для VentCtrl)
 //  Минует isVentRelay() и антидребезг.
-// ═══════════════════════════════════════════════════════════════════
-bool RelayMgr::setRelayDirect(uint8_t idx, bool on) {
-    if (idx >= NUM_RELAYS) return false;
-
-    digitalWrite(RELAY_PINS[idx], on ? HIGH : LOW);
-    s_lastToggleMs[idx] = steadyMs();
-
-    // Сохраняем состояние в g_settings для отображения в snapshot
-    {
-        MutexGuard lock(g_settingsMutex, pdMS_TO_TICKS(20));
-        if (lock.locked()) {
-            g_settings.relayState[idx] = on;
-            // Реле форточек в NVS НЕ сохраняем — они стартуют в STOP
-            if (!isVentRelay(idx)) settingsSaveDeferred();
-        }
-    }
-    return true;
-}

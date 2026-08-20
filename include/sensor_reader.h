@@ -41,6 +41,8 @@ struct SensorSnapshot {
 
     // YL-83 (дождь)
     bool     rain;       // true = дождь, false = сухо
+    uint16_t rainRaw;    // v6.2: сырое значение ADC1, 0..4095 — по нему
+                         // подбираются пороги RAIN_ADC_WET/RAIN_ADC_DRY
 
     // AJ-SR04M (уровень воды)
     float    waterLevelPct;  // %. NaN при отказе.

@@ -21,6 +21,8 @@
 #include "settings.h"
 #include "config.h"
 #include <math.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
 
 // ─── Внутренние типы ─────────────────────────────────────────────
 // Какая форточка задействована
@@ -46,7 +48,11 @@ static VentLeaf s_bottom = {0.0f, MD_STOP, 0, 0.0f, BOTTOM_CALIB_SEC * 1000U, fa
 // Текущая команда ручного режима
 static VentManualCmd s_manualCmd       = VMC_NONE;
 static uint64_t      s_manualCmdSetMs  = 0;     // Когда нажали кнопку
-static bool          s_manualHandoff   = false; // Прошёл break-before-make между моторами
+// v6.2: эстафета между моторами теперь по дедлайну, а не через
+// vTaskDelay. Заголовок файла обещает «никаких блокирующих delay»,
+// но их было четыре штуки по 200 мс прямо в processManual — на это
+// время taskCore1 переставал опрашивать датчики, кнопки и насос.
+static uint64_t      s_handoffUntilMs  = 0;     // До этого времени пауза между моторами
 
 // Автомат авто-режима
 static VentAutoState s_autoState   = VAS_IDLE;
@@ -68,6 +74,54 @@ static bool s_rainActive = false;
 static bool     s_homingActive = false;
 static VentSide s_homingSide   = VS_TOP;
 static uint64_t s_homingEndMs  = 0;
+
+// ─── Очередь команд (v6.2) ───────────────────────────────────────
+// Раньше внешние точки входа — manualSetCmd(), onModeChanged(),
+// startHoming(), cancelHoming() — выполнялись прямо в вызывающей задаче.
+// А вызывают их три разные: AsyncTCP (веб-сокет), loopTask (MQTT) и
+// taskCore1 (кнопки). onModeChanged() при этом дёргает stopAllMotors(),
+// то есть писал в GPIO параллельно с управляющим циклом, работающим с
+// теми же s_top/s_bottom без какой-либо синхронизации. На H-мосте такое
+// чередование способно включить OPEN и CLOSE одновременно.
+//
+// Теперь внешние вызовы только КЛАДУТ команду в очередь, а исполняет её
+// drainCommands() в начале update(), то есть строго в taskCore1.
+// Правило простое: реле двигает одна задача, остальные просят.
+enum VentCmdType : uint8_t {
+    VC_MANUAL = 0,      // arg = VentManualCmd
+    VC_MODE_CHANGED,    // arg = 1 (авто) / 0 (ручной)
+    VC_HOMING_START,    // arg = сторона: 0 верх, 1 низ
+    VC_HOMING_CANCEL,
+    VC_SET_CALIB        // arg = сторона, val = секунды
+};
+
+struct VentCmd {
+    uint8_t  type;
+    uint8_t  arg;
+    uint16_t val;
+};
+
+#define VENT_CMD_QUEUE_LEN 8
+static QueueHandle_t s_cmdQ = nullptr;
+
+static bool postCmd(uint8_t type, uint8_t arg, uint16_t val = 0) {
+    if (!s_cmdQ) return false;   // init() ещё не отработал
+    VentCmd c = { type, arg, val };
+    if (xQueueSend(s_cmdQ, &c, 0) != pdTRUE) {
+        Serial.println(F("[VENT] Command queue FULL — command dropped"));
+        return false;
+    }
+    return true;
+}
+
+// Реализации команд. Вызываются ТОЛЬКО из drainCommands(), то есть
+// из taskCore1. Снаружи доступны одноимённые публичные обёртки,
+// которые лишь кладут команду в очередь.
+static void applyManualCmd(VentManualCmd cmd);
+static void applyModeChanged(bool autoMode);
+static bool applyHomingStart(uint8_t side);
+static void applyHomingCancel();
+static void applySetCalib(uint8_t side, uint16_t sec);
 
 // ═══════════════════════════════════════════════════════════════════
 //  УТИЛИТЫ
@@ -151,16 +205,41 @@ static void setMotorDir(VentSide side, MotorDir newDir, uint64_t nowMs) {
     VentLeaf& leaf = (side == VS_TOP) ? s_top : s_bottom;
     if (leaf.dir == newDir) return;  // ничего не меняется
 
-    uint8_t openIdx  = (side == VS_TOP) ? RELAY_IDX_VENT_UPPER_OPEN  : RELAY_IDX_VENT_LOWER_OPEN;
-    uint8_t closeIdx = (side == VS_TOP) ? RELAY_IDX_VENT_UPPER_CLOSE : RELAY_IDX_VENT_LOWER_CLOSE;
+    const uint8_t ventIdx = (side == VS_TOP) ? VENT_IDX_UPPER : VENT_IDX_LOWER;
 
-    // Сначала ВЫКЛЮЧАЕМ всё (break-before-make)
-    RelayMgr::setRelayDirect(openIdx,  false);
-    RelayMgr::setRelayDirect(closeIdx, false);
+    // v6.2: реле форточек переключаются ТОЛЬКО через H-мостовое API.
+    // Здесь стоял setRelayDirect(), который дёргает GPIO напрямую: OFF
+    // противоположного и ON нужного шли подряд, и заявленная в config.h
+    // пауза HBRIDGE_BREAK_BEFORE_MAKE_MS не соблюдалась вообще. При этом
+    // сам механизм в RelayMgr::moveVent() был написан и работал вхолостую —
+    // у него не было ни одного вызывающего во всём проекте.
+    //
+    // Реверс мотора теперь идёт так: OFF → 100 мс → ON, причём паузу
+    // отсчитывает updatePending(), а не блокирующая задержка.
+    if (newDir == MD_STOP) {
+        if (!RelayMgr::stopVent(ventIdx)) {
+            // Остановка не имеет права «не получиться»: если мьютекс занят,
+            // обесточиваем напрямую. Учёт состояния отстанет — мотор важнее.
+            RelayMgr::forceOff(RelayMgr::ventOpenRelayIdx(ventIdx));
+            RelayMgr::forceOff(RelayMgr::ventCloseRelayIdx(ventIdx));
+        }
+    } else {
+        if (!RelayMgr::moveVent(ventIdx,
+                newDir == MD_OPEN ? VENT_DIR_OPENING : VENT_DIR_CLOSING)) {
+            // Мьютекс занят. Состояние НЕ меняем и выходим: иначе учёт
+            // разошёлся бы с железом — считали бы, что едем, а мотор стоит.
+            // update() зовётся каждые 50 мс, попытка повторится сама.
+            Serial.printf("[VENT] %s: moveVent deferred (bus busy)\n",
+                side == VS_TOP ? "TOP" : "BOTTOM");
+            return;
+        }
+    }
 
-    // Если был движущийся мотор — обновляем pct по фактическому ходу
+    // Если был движущийся мотор — обновляем pct по фактическому ходу.
+    // moveStartMs может лежать в будущем (см. ниже про dead-time), поэтому
+    // вычитаем только когда время действительно наступило.
     if (leaf.dir != MD_STOP && leaf.calibMs > 0) {
-        uint64_t elapsed = nowMs - leaf.moveStartMs;
+        uint64_t elapsed = (nowMs > leaf.moveStartMs) ? (nowMs - leaf.moveStartMs) : 0;
         float deltaPct = (float)elapsed * 100.0f / (float)leaf.calibMs;
         if (leaf.dir == MD_OPEN)  leaf.pct = leaf.pctAtMoveStart + deltaPct;
         if (leaf.dir == MD_CLOSE) leaf.pct = leaf.pctAtMoveStart - deltaPct;
@@ -169,15 +248,18 @@ static void setMotorDir(VentSide side, MotorDir newDir, uint64_t nowMs) {
         persistVentPosition(side, leaf.pct);
     }
 
-    // Включаем нужное направление
-    if (newDir == MD_OPEN) {
-        RelayMgr::setRelayDirect(openIdx, true);
-    } else if (newDir == MD_CLOSE) {
-        RelayMgr::setRelayDirect(closeIdx, true);
-    }
+    // Мотор мог не тронуться прямо сейчас: при смене направления RelayMgr
+    // выдерживает паузу break-before-make. Спрашиваем у него точную
+    // задержку, а не угадываем по прежнему направлению — включение
+    // откладывается и в случае «стоп, а следом пуск в тот же тик»,
+    // который по dir неотличим от обычного старта с нуля.
+    // Без поправки позиция набирала бы лишние 100 мс хода на каждом
+    // реверсе, а концевиков в схеме нет — ошибка копится.
+    const uint32_t startDelay = (newDir == MD_STOP)
+        ? 0 : RelayMgr::ventStartDelayMs(ventIdx, nowMs);
 
     leaf.dir            = newDir;
-    leaf.moveStartMs    = nowMs;
+    leaf.moveStartMs    = nowMs + startDelay;
     leaf.pctAtMoveStart = leaf.pct;
 
     Serial.printf("[VENT] %s motor: %s (pct=%.1f)\n",
@@ -196,6 +278,10 @@ static void stopAllMotors(uint64_t nowMs) {
 static void updateMovingPct(VentSide side, uint64_t nowMs) {
     VentLeaf& leaf = (side == VS_TOP) ? s_top : s_bottom;
     if (leaf.dir == MD_STOP || leaf.calibMs == 0) return;
+    // v6.2: во время паузы break-before-make мотор ещё стоит, а moveStartMs
+    // лежит в будущем. Без этой проверки вычитание uint64 ушло бы в минус
+    // и позиция скакнула бы к границе диапазона.
+    if (nowMs <= leaf.moveStartMs) return;
 
     uint64_t elapsed = nowMs - leaf.moveStartMs;
     float deltaPct = (float)elapsed * 100.0f / (float)leaf.calibMs;
@@ -236,7 +322,7 @@ static void processManual(uint64_t nowMs) {
     if (s_manualCmd == VMC_NONE) {
         // Кнопка отпущена — стопим всё
         stopAllMotors(nowMs);
-        s_manualHandoff = false;
+        s_handoffUntilMs = 0;
         return;
     }
 
@@ -256,22 +342,19 @@ static void processManual(uint64_t nowMs) {
             // Крутим верх. Если работает нижний — стоп.
             if (s_bottom.dir != MD_STOP) setMotorDir(VS_BOTTOM, MD_STOP, nowMs);
             if (s_top.dir != MD_OPEN) {
-                if (s_manualHandoff) { vTaskDelay(pdMS_TO_TICKS(MANUAL_RELAY_HANDOFF_MS)); s_manualHandoff = false; }
+                if (nowMs < s_handoffUntilMs) return;   // пауза эстафеты
                 setMotorDir(VS_TOP, MD_OPEN, nowMs);
             }
         } else {
             // Верх 100% — эстафета на низ
             if (s_top.dir != MD_STOP) {
                 setMotorDir(VS_TOP, MD_STOP, nowMs);
-                s_manualHandoff = true;
+                s_handoffUntilMs = nowMs + MANUAL_RELAY_HANDOFF_MS;
                 return;  // на следующем тике запустим bottom
             }
             if (s_bottom.pct < 99.5f) {
                 if (s_bottom.dir != MD_OPEN) {
-                    if (s_manualHandoff) {
-                        vTaskDelay(pdMS_TO_TICKS(MANUAL_RELAY_HANDOFF_MS));
-                        s_manualHandoff = false;
-                    }
+                    if (nowMs < s_handoffUntilMs) return;   // пауза эстафеты
                     setMotorDir(VS_BOTTOM, MD_OPEN, nowMs);
                 }
             } else {
@@ -284,21 +367,18 @@ static void processManual(uint64_t nowMs) {
         if (s_bottom.pct > 0.5f) {
             if (s_top.dir != MD_STOP) setMotorDir(VS_TOP, MD_STOP, nowMs);
             if (s_bottom.dir != MD_CLOSE) {
-                if (s_manualHandoff) { vTaskDelay(pdMS_TO_TICKS(MANUAL_RELAY_HANDOFF_MS)); s_manualHandoff = false; }
+                if (nowMs < s_handoffUntilMs) return;   // пауза эстафеты
                 setMotorDir(VS_BOTTOM, MD_CLOSE, nowMs);
             }
         } else {
             if (s_bottom.dir != MD_STOP) {
                 setMotorDir(VS_BOTTOM, MD_STOP, nowMs);
-                s_manualHandoff = true;
+                s_handoffUntilMs = nowMs + MANUAL_RELAY_HANDOFF_MS;
                 return;
             }
             if (s_top.pct > 0.5f) {
                 if (s_top.dir != MD_CLOSE) {
-                    if (s_manualHandoff) {
-                        vTaskDelay(pdMS_TO_TICKS(MANUAL_RELAY_HANDOFF_MS));
-                        s_manualHandoff = false;
-                    }
+                    if (nowMs < s_handoffUntilMs) return;   // пауза эстафеты
                     setMotorDir(VS_TOP, MD_CLOSE, nowMs);
                 }
             } else {
@@ -346,6 +426,7 @@ static void startStep(VentSide side, int8_t dir, uint64_t nowMs) {
 static bool stepCompleted(uint64_t nowMs) {
     VentLeaf& leaf = (s_autoActiveSide == VS_TOP) ? s_top : s_bottom;
     if (leaf.dir == MD_STOP) return true;
+    if (nowMs <= leaf.moveStartMs) return false;   // ещё идёт пауза H-моста
     uint64_t elapsed = nowMs - leaf.moveStartMs;
     uint32_t needMs  = (uint32_t)leaf.calibMs * VENT_AUTO_STEP_PCT / 100U;
     return elapsed >= needMs;
@@ -528,13 +609,20 @@ static void processAuto(uint64_t nowMs, float temp) {
 //  ПУБЛИЧНЫЙ API
 // ═══════════════════════════════════════════════════════════════════
 void VentCtrl::init() {
+    // v6.2: очередь создаём ПЕРВОЙ. До неё postCmd() молча отказывает,
+    // и команда, пришедшая по сети раньше инициализации, потерялась бы.
+    if (!s_cmdQ) {
+        s_cmdQ = xQueueCreate(VENT_CMD_QUEUE_LEN, sizeof(VentCmd));
+        configASSERT(s_cmdQ);
+    }
+
     loadPositionsFromNVS();
 
     // Инициализируем реле в STOP (на всякий случай)
-    RelayMgr::setRelayDirect(RELAY_IDX_VENT_UPPER_OPEN,  false);
-    RelayMgr::setRelayDirect(RELAY_IDX_VENT_UPPER_CLOSE, false);
-    RelayMgr::setRelayDirect(RELAY_IDX_VENT_LOWER_OPEN,  false);
-    RelayMgr::setRelayDirect(RELAY_IDX_VENT_LOWER_CLOSE, false);
+    RelayMgr::forceOff(RELAY_IDX_VENT_UPPER_OPEN);
+    RelayMgr::forceOff(RELAY_IDX_VENT_UPPER_CLOSE);
+    RelayMgr::forceOff(RELAY_IDX_VENT_LOWER_OPEN);
+    RelayMgr::forceOff(RELAY_IDX_VENT_LOWER_CLOSE);
 
     s_top.dir         = MD_STOP;
     s_bottom.dir      = MD_STOP;
@@ -550,7 +638,7 @@ void VentCtrl::init() {
 // ═══════════════════════════════════════════════════════════════════
 //  КАЛИБРОВОЧНЫЙ ПРОГОН
 // ═══════════════════════════════════════════════════════════════════
-bool VentCtrl::startHoming(uint8_t side) {
+static bool applyHomingStart(uint8_t side) {
     if (side > 1) return false;
     if (s_homingActive) return false;
 
@@ -587,7 +675,7 @@ bool VentCtrl::isHoming(uint8_t side) {
     return (side == 0) ? (s_homingSide == VS_TOP) : (s_homingSide == VS_BOTTOM);
 }
 
-void VentCtrl::cancelHoming() {
+static void applyHomingCancel() {
     if (!s_homingActive) return;
     s_homingActive = false;
     stopAllMotors(steadyMs());
@@ -623,7 +711,32 @@ static bool processHoming(uint64_t nowMs) {
     return false;
 }
 
+// Разбор накопленных команд. Выполняется в taskCore1 перед логикой
+// режима, поэтому к моменту работы автоматики состояние уже согласовано.
+static void drainCommands() {
+    if (!s_cmdQ) return;
+    VentCmd c;
+    // Ограничиваем число команд за тик: очередь короткая, но заливать
+    // её быстрее, чем мы разбираем, всё же не должно застопорить цикл.
+    for (uint8_t guard = 0; guard < VENT_CMD_QUEUE_LEN; guard++) {
+        if (xQueueReceive(s_cmdQ, &c, 0) != pdTRUE) return;
+        switch (c.type) {
+            case VC_MANUAL:        applyManualCmd((VentManualCmd)c.arg); break;
+            case VC_MODE_CHANGED:  applyModeChanged(c.arg != 0);         break;
+            case VC_HOMING_START:  applyHomingStart(c.arg);              break;
+            case VC_HOMING_CANCEL: applyHomingCancel();                  break;
+            case VC_SET_CALIB:     applySetCalib(c.arg, c.val);          break;
+            default: break;
+        }
+    }
+}
+
 void VentCtrl::update(uint64_t nowMs, float temp, bool rain, bool autoMode) {
+    // v6.2: сначала исполняем всё, что пришло от веб-сокета, MQTT и
+    // кнопок. Только здесь, в taskCore1, состояние форточек и реле
+    // имеют право меняться.
+    drainCommands();
+
     // Edge: смена состояния дождя
     if (rain && !s_rainActive) {
         Serial.println(F("[VENT] RAIN detected — emergency close"));
@@ -643,16 +756,16 @@ void VentCtrl::update(uint64_t nowMs, float temp, bool rain, bool autoMode) {
     }
 }
 
-void VentCtrl::manualSetCmd(VentManualCmd cmd) {
+static void applyManualCmd(VentManualCmd cmd) {
     // v6.1: любое ручное вмешательство отменяет калибровочный прогон —
     // иначе кнопка не отреагирует, а пользователь решит, что панель зависла.
-    if (s_homingActive && cmd != VMC_NONE) VentCtrl::cancelHoming();
+    if (s_homingActive && cmd != VMC_NONE) applyHomingCancel();
 
     if (cmd == s_manualCmd) return;  // нет изменения
 
     s_manualCmd      = cmd;
     s_manualCmdSetMs = steadyMs();
-    s_manualHandoff  = false;
+    s_handoffUntilMs = 0;
 
     Serial.printf("[VENT] Manual cmd: %s\n", cmdName(cmd));
 
@@ -662,32 +775,61 @@ void VentCtrl::manualSetCmd(VentManualCmd cmd) {
     }
 }
 
-bool VentCtrl::setTopCalibSec(uint16_t sec) {
-    if (sec < 1 || sec > 120) return false;
-    s_top.calibMs = sec * 1000U;
+static void applySetCalib(uint8_t side, uint16_t sec) {
+    VentLeaf& leaf = (side == 0) ? s_top : s_bottom;
+    leaf.calibMs = (uint32_t)sec * 1000U;
     {
         MutexGuard lock(g_settingsMutex, pdMS_TO_TICKS(50));
         if (lock.locked()) {
-            g_settings.ventUpperCal.travelMs = s_top.calibMs;
+            VentCalibration& cal = (side == 0)
+                ? g_settings.ventUpperCal : g_settings.ventLowerCal;
+            cal.travelMs = leaf.calibMs;
             settingsSaveDeferred();
         }
     }
-    Serial.printf("[VENT] Top calibration set: %u sec\n", (unsigned)sec);
-    return true;
+    Serial.printf("[VENT] %s calibration set: %u sec\n",
+        side == 0 ? "Top" : "Bottom", (unsigned)sec);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  ПУБЛИЧНОЕ API — только постановка команд в очередь
+// ═══════════════════════════════════════════════════════════════════
+// Все функции ниже вызываются из чужих задач (AsyncTCP, loopTask,
+// taskCore1) и НЕ ДОЛЖНЫ трогать ни s_top/s_bottom, ни реле.
+// Проверки аргументов делаются сразу — панели нужен честный ответ
+// «принято / отказано», а исполнение всё равно произойдёт в taskCore1.
+
+void VentCtrl::manualSetCmd(VentManualCmd cmd) {
+    postCmd(VC_MANUAL, (uint8_t)cmd);
+}
+
+void VentCtrl::onModeChanged(bool autoMode) {
+    postCmd(VC_MODE_CHANGED, autoMode ? 1 : 0);
+}
+
+bool VentCtrl::startHoming(uint8_t side) {
+    // Быстрые проверки — чтобы вернуть ответ панели прямо сейчас.
+    // Состояние читаем без блокировки: это подсказка пользователю,
+    // а настоящее решение примет applyHomingStart в taskCore1.
+    if (side > 1) return false;
+    if (s_homingActive) return false;
+    const VentLeaf& leaf = (side == 0) ? s_top : s_bottom;
+    if (leaf.calibMs == 0) return false;
+    return postCmd(VC_HOMING_START, side);
+}
+
+void VentCtrl::cancelHoming() {
+    postCmd(VC_HOMING_CANCEL, 0);
+}
+
+bool VentCtrl::setTopCalibSec(uint16_t sec) {
+    if (sec < 1 || sec > 120) return false;
+    return postCmd(VC_SET_CALIB, 0, sec);
 }
 
 bool VentCtrl::setBottomCalibSec(uint16_t sec) {
     if (sec < 1 || sec > 120) return false;
-    s_bottom.calibMs = sec * 1000U;
-    {
-        MutexGuard lock(g_settingsMutex, pdMS_TO_TICKS(50));
-        if (lock.locked()) {
-            g_settings.ventLowerCal.travelMs = s_bottom.calibMs;
-            settingsSaveDeferred();
-        }
-    }
-    Serial.printf("[VENT] Bottom calibration set: %u sec\n", (unsigned)sec);
-    return true;
+    return postCmd(VC_SET_CALIB, 1, sec);
 }
 
 uint16_t VentCtrl::getTopCalibSec()    { return s_top.calibMs    / 1000U; }
@@ -708,7 +850,7 @@ void VentCtrl::getStatus(VentStatusSnapshot& out) {
     out.bottomHoming   = s_homingActive && s_homingSide == VS_BOTTOM;
 }
 
-void VentCtrl::onModeChanged(bool autoMode) {
+static void applyModeChanged(bool autoMode) {
     Serial.printf("[VENT] Mode changed -> %s, stopping all motors\n",
                   autoMode ? "AUTO" : "MANUAL");
     s_homingActive = false;   // v6.1: смена режима прерывает прогон

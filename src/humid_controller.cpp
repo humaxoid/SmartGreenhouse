@@ -54,12 +54,10 @@ void HumidCtrl::update(float humidity) {
             s_sensorFailed = true;
             Serial.println(F("[HUMID] Sensor NaN — forcing OFF"));
         }
-        // Принудительное выключение реле, если было включено
-        if (RelayMgr::getState(RELAY_IDX_HUMID)) {
-            if (RelayMgr::setRelay(RELAY_IDX_HUMID, false)) {
-                WsHandler::notifyRelayChange(RELAY_IDX_HUMID);
-            }
-        }
+        // v6.2: аварийное выключение мимо антидребезга. Через setRelay()
+        // первая попытка в пределах секунды после включения возвращала
+        // false, и увлажнитель оставался работать до следующего тика.
+        RelayMgr::forceOff(RELAY_IDX_HUMID);
         return;
     }
 
@@ -76,7 +74,7 @@ void HumidCtrl::update(float humidity) {
         if (RelayMgr::getState(RELAY_IDX_HUMID)) {
             Serial.printf("[HUMID] Invalid thresholds (low=%.1f >= high=%.1f)\n",
                 humidLow, humidHigh);
-            RelayMgr::setRelay(RELAY_IDX_HUMID, false);
+            RelayMgr::forceOff(RELAY_IDX_HUMID);
         }
         return;
     }

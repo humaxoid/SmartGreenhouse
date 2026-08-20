@@ -16,8 +16,6 @@ AppSettings       g_settings;
 SemaphoreHandle_t g_settingsMutex = nullptr;
 std::atomic<bool> g_settingsDirty{false};
 
-VentRuntime       g_ventRuntime[NUM_VENTS];
-SemaphoreHandle_t g_ventRuntimeMutex = nullptr;
 
 // NVS namespace — изменился в v5.0 (старый "gh4" не совместим по структуре)
 static const char* NVS_NAMESPACE = "gh5";
@@ -118,10 +116,6 @@ void settingsLoad() {
     if (!g_settingsMutex) {
         g_settingsMutex = xSemaphoreCreateRecursiveMutex();
         configASSERT(g_settingsMutex);
-    }
-    if (!g_ventRuntimeMutex) {
-        g_ventRuntimeMutex = xSemaphoreCreateRecursiveMutex();
-        configASSERT(g_ventRuntimeMutex);
     }
 
     Preferences prefs;
@@ -283,53 +277,3 @@ void settingsReset() {
     Serial.println(F("[SETTINGS] Reset to factory defaults completed"));
 }
 
-// ═══════════════════════════════════════════════════════════════════
-//  ИНИЦИАЛИЗАЦИЯ RUNTIME СОСТОЯНИЯ ФОРТОЧЕК
-// ═══════════════════════════════════════════════════════════════════
-// Вызывается после settingsLoad(). Инициализирует эфемерное состояние
-// g_ventRuntime на основе сохранённой позиции из g_settings.
-//
-// Логика:
-//   • positionValid=1 → верим сохранённой позиции, ставим её в targetPct
-//     (чтобы при старте в auto-режиме форточка не двигалась без причины).
-//   • positionValid=0 → needsCalibration=true, контроллер выполнит
-//     home-последовательность (закрыть до концевика + запас 10%).
-//
-// Мьютекс при вызове не нужен — задачи ещё не запущены.
-void ventRuntimeInit() {
-    for (uint8_t v = 0; v < NUM_VENTS; v++) {
-        VentRuntime& rt = g_ventRuntime[v];
-        const VentPersistent& ps = (v == VENT_IDX_UPPER)
-            ? g_settings.ventUpperPos
-            : g_settings.ventLowerPos;
-
-        // v6.0: автокалибровка убрана. Если позиция невалидна (первый старт) —
-        // считаем что форточка ЗАКРЫТА (0%) — пользователь должен убедиться
-        // в этом перед первой подачей питания.
-        if (ps.positionValid == 0) {
-            rt.currentPct = 0.0f;
-        } else {
-            rt.currentPct = (float)ps.lastKnownPct;
-        }
-        rt.targetPct        = rt.currentPct;
-        rt.direction        = VENT_DIR_STOPPED;
-        rt.moveStartMs      = 0;
-        rt.lastDirChangeMs  = 0;
-        rt.needsCalibration = false;   // v6.0: автокалибровка отключена
-        rt.calibrating      = false;
-
-        // Если позиция была невалидной — сохраняем "0% valid" в NVS,
-        // чтобы при следующих запусках не выводить лишний лог
-        if (ps.positionValid == 0) {
-            VentPersistent& pps = (v == VENT_IDX_UPPER)
-                ? g_settings.ventUpperPos
-                : g_settings.ventLowerPos;
-            pps.lastKnownPct  = 0;
-            pps.positionValid = 1;
-            settingsSaveDeferred();
-        }
-
-        Serial.printf("[VENT] Runtime init #%u: pos=%.1f%% valid=%u (autocal disabled)\n",
-            (unsigned)v, rt.currentPct, ps.positionValid);
-    }
-}

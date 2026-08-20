@@ -105,11 +105,16 @@ static void gracefulShutdown(bool isLittleFs) {
     // То есть все четыре вызова были no-op с руганью в лог, и моторы
     // продолжали крутиться всю запись флеша и перезагрузку — секунд
     // двадцать-тридцать. Створка успевала дойти до концевика и стоять
-    // под током. Нужен setRelayDirect(), он для этих реле и предназначен.
-    RelayMgr::setRelayDirect(RELAY_IDX_VENT_UPPER_OPEN,  false);
-    RelayMgr::setRelayDirect(RELAY_IDX_VENT_UPPER_CLOSE, false);
-    RelayMgr::setRelayDirect(RELAY_IDX_VENT_LOWER_OPEN,  false);
-    RelayMgr::setRelayDirect(RELAY_IDX_VENT_LOWER_CLOSE, false);
+    // под током.
+    //
+    // v6.2: через forceOff(), а не setRelayDirect(). Разница в том, что
+    // forceOff ещё и снимает отложенное включение H-моста: без этого
+    // updatePending() мог через 100 мс добросовестно включить реле,
+    // которое мы только что обесточили перед записью флеша.
+    RelayMgr::forceOff(RELAY_IDX_VENT_UPPER_OPEN);
+    RelayMgr::forceOff(RELAY_IDX_VENT_UPPER_CLOSE);
+    RelayMgr::forceOff(RELAY_IDX_VENT_LOWER_OPEN);
+    RelayMgr::forceOff(RELAY_IDX_VENT_LOWER_CLOSE);
 
     {
         VentStatusSnapshot vs;

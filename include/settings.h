@@ -172,33 +172,6 @@ enum VentDirection : uint8_t {
     VENT_DIR_CLOSING = 2    // Движение на закрытие (реле CLOSE = ON)
 };
 
-struct VentRuntime {
-    // Текущая позиция в процентах [0..100]. Обновляется в VentCtrl::update()
-    // исходя из прошедшего времени движения.
-    // float, а не uint8_t — чтобы точность накопления была высокой
-    // (1% для верхней = 420 мс, с uint8_t каждый цикл было бы округление).
-    float   currentPct;
-
-    // Целевая позиция, % [0..100]. Задаётся либо авто-логикой по
-    // температуре, либо вручную через веб или кнопку.
-    float   targetPct;
-
-    // Направление движения прямо сейчас
-    VentDirection direction;
-
-    // Время начала текущего движения (мс). 0 = не движется.
-    uint64_t moveStartMs;
-
-    // Время последнего изменения направления (для break-before-make)
-    uint64_t lastDirChangeMs;
-
-    // Флаг: позиция требует калибровки (home). Устанавливается при
-    // старте ESP32 если positionValid = 0 в NVS, или раз в сутки в 3:00.
-    bool     needsCalibration;
-
-    // Флаг: идёт процесс калибровки (движение до нижнего концевика).
-    bool     calibrating;
-};
 
 // ═══════════════════════════════════════════════════════════════════
 //  ГЛОБАЛЬНЫЕ ОБЪЕКТЫ
@@ -207,12 +180,14 @@ extern AppSettings       g_settings;
 extern SemaphoreHandle_t g_settingsMutex;
 extern std::atomic<bool> g_settingsDirty;
 
-// Runtime состояние форточек (не в NVS!)
-extern VentRuntime       g_ventRuntime[NUM_VENTS];
-// Этот мьютекс защищает ТОЛЬКО g_ventRuntime.
-// Нельзя использовать g_settingsMutex — иначе deadlock при обновлении
-// позиции (часто) и одновременном сохранении настроек (редко).
-extern SemaphoreHandle_t g_ventRuntimeMutex;
+// v6.2: g_ventRuntime, g_ventRuntimeMutex и ventRuntimeInit() удалены.
+// Это остаток архитектуры v5: с v6.0 позицию и направление ведёт сам
+// VentCtrl в своих s_top/s_bottom, ventRuntimeInit() не вызывалась
+// ниоткуда, а массив читался только внутри неё самой. При этом мьютекс
+// исправно создавался при каждом старте, а комментарии в
+// relay_manager.h продолжали ссылаться на несуществующий источник
+// правды — самый короткий путь к тому, чтобы кто-то начал использовать
+// неправильное состояние позиции.
 
 // ═══════════════════════════════════════════════════════════════════
 //  ВСПОМОГАТЕЛЬНЫЙ RAII-ЗАХВАТ МЬЮТЕКСА
@@ -272,8 +247,3 @@ uint32_t settingsNvsWriteCount();
 // Используется при первом запуске или при действии пользователя
 // "factory reset" через веб.
 void settingsReset();
-
-// Инициализация g_ventRuntime на основе g_settings. Вызывается после
-// settingsLoad(). Если positionValid=1, восстанавливает позицию;
-// иначе ставит флаг needsCalibration для calibration-routine.
-void ventRuntimeInit();

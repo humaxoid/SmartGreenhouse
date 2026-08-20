@@ -173,6 +173,10 @@ static void buildStateJson(JsonDocument& doc) {
         sensors["pressure"] = round(s.bmePress * 10) / 10.0;
     if (s.luxOk)      sensors["lux"]        = (uint32_t)s.lux;
     sensors["rain"] = s.rain;
+    // v6.2: сырое значение АЦП датчика дождя. Нужно, чтобы подобрать
+    // RAIN_ADC_WET/RAIN_ADC_DRY под конкретный модуль, не подключая USB:
+    // смочили пластину — посмотрели число, высушили — посмотрели снова.
+    sensors["rainRaw"] = s.rainRaw;
     if (s.waterOk && !isnan(s.waterLevelPct))
         sensors["waterLevel"] = round(s.waterLevelPct * 10) / 10.0;
 

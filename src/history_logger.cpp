@@ -121,9 +121,14 @@ static void saveToFile() {
 
     // Атомарное переименование: либо старый файл, либо новый полный.
     // Никогда "половина нового" — защита от обрыва питания.
-    LittleFS.remove(HIST_FILE);
+    //
+    // v6.2: перед rename стоял LittleFS.remove(HIST_FILE) — и он-то
+    // атомарность и ломал. lfs_rename заменяет существующий файл сам,
+    // одной транзакцией; предварительное удаление создавало окно, в
+    // котором обрыв питания оставлял систему вообще без истории.
     if (!LittleFS.rename(tmpFile, HIST_FILE)) {
         Serial.println(F("[HIST] Rename failed"));
+        LittleFS.remove(tmpFile);   // не копим мусор при отказе
     }
 }
 

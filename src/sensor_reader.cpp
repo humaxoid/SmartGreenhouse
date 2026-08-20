@@ -171,11 +171,15 @@ namespace SensorRdr { bool isI2cDead() { return s_i2cDead; } }
 // ═══════════════════════════════════════════════════════════════════
 //  АНТИДРЕБЕЗГ ДОЖДЯ
 // ═══════════════════════════════════════════════════════════════════
-// Цифровой DO YL-83 может дребезжать на границе срабатывания.
-// Считаем стабильным если 5 чтений подряд дали одно значение.
-static bool    s_rainState    = false;
-static uint8_t s_rainStable   = 0;
-static bool    s_rainLastRead = false;
+// v6.2: аналоговый AO YL-83 на ADC1. Решение о дожде принимается по двум
+// разным порогам (гистерезис, см. config.h), а сверх того требуется
+// 5 одинаковых чтений подряд — гистерезис убирает дребезг у порога,
+// счётчик убирает одиночные всплески.
+static bool     s_rainState     = false;
+static uint8_t  s_rainStable    = 0;
+static bool     s_rainLastRead  = false;
+static uint16_t s_rainRaw       = RAIN_ADC_MAX;  // последнее сырое значение
+static bool     s_rainSensorBad = false;         // обрыв/КЗ линии
 #define RAIN_STABLE_COUNT 5
 
 // ═══════════════════════════════════════════════════════════════════
@@ -395,12 +399,23 @@ void SensorRdr::init() {
     Serial.printf("[SENSOR] DHT22 on GPIO%d\n", DHT22_PIN);
 
     // ── YL-83 (дождь) ─────────────────────────────────────────────
+    // v6.2: аналоговый вход. 11 dB даёт полный диапазон 0..~3.3 В —
+    // при затухании по умолчанию верхняя часть шкалы обрезалась бы, а
+    // «сухо» у YL-83 живёт как раз наверху.
     pinMode(RAIN_SENSOR_PIN, INPUT);
-    s_rainState    = (digitalRead(RAIN_SENSOR_PIN) == RAIN_ACTIVE_LEVEL);
+    analogSetPinAttenuation(RAIN_SENSOR_PIN, ADC_11db);
+    s_rainRaw      = (uint16_t)analogRead(RAIN_SENSOR_PIN);
+    s_rainState    = (s_rainRaw >= RAIN_ADC_MIN_VALID) && (s_rainRaw <= RAIN_ADC_WET);
     s_rainLastRead = s_rainState;
     s_rainStable   = RAIN_STABLE_COUNT;
-    Serial.printf("[SENSOR] Rain sensor on GPIO%d, initial=%s\n",
-        RAIN_SENSOR_PIN, s_rainState ? "RAIN" : "DRY");
+    Serial.printf("[SENSOR] Rain sensor on GPIO%d (ADC1), raw=%u, initial=%s "
+                  "(wet<=%u, dry>=%u)\n",
+        RAIN_SENSOR_PIN, (unsigned)s_rainRaw, s_rainState ? "RAIN" : "DRY",
+        (unsigned)RAIN_ADC_WET, (unsigned)RAIN_ADC_DRY);
+
+    // Ошибка в порогах ловится при старте, а не в дождь.
+    static_assert(RAIN_ADC_WET < RAIN_ADC_DRY,
+        "RAIN_ADC_WET должен быть МЕНЬШЕ RAIN_ADC_DRY — иначе гистерезиса нет");
 
     // ── AJ-SR04M: TRIG как OUTPUT, ECHO настраивается RMT ────────
     pinMode(WATER_TRIG_PIN, OUTPUT);
@@ -507,20 +522,59 @@ void SensorRdr::update(uint64_t nowMs) {
         }
     }
 
-    // ── Дождь (опрос каждый цикл, быстро) ────────────────────────
+    // ── Дождь (аналоговый AO, опрос каждый цикл) ─────────────────
+    // v6.2: было digitalRead() по DO. Теперь читаем AO через ADC1 —
+    // см. подробности в config.h рядом с RAIN_SENSOR_PIN.
     {
-        bool curRead = (digitalRead(RAIN_SENSOR_PIN) == RAIN_ACTIVE_LEVEL);
-        if (curRead == s_rainLastRead) {
-            if (s_rainStable < RAIN_STABLE_COUNT) s_rainStable++;
+        // Медиана трёх подряд: ADC1 у ESP32 шумный, одиночный выброс
+        // на границе порога иначе переключил бы состояние.
+        const int a = analogRead(RAIN_SENSOR_PIN);
+        const int b = analogRead(RAIN_SENSOR_PIN);
+        const int c = analogRead(RAIN_SENSOR_PIN);
+        const uint16_t raw = (uint16_t)median3((float)a, (float)b, (float)c);
+        s_rainRaw = raw;
+
+        // Неправдоподобно низкое значение — обрыв или КЗ линии. Исправный
+        // модуль даже залитый водой столько не отдаёт. Считаем СУХО:
+        // держать форточки закрытыми из-за неисправного датчика опаснее,
+        // чем не закрыть их по дождю — в закрытой теплице растения сварятся.
+        if (raw < RAIN_ADC_MIN_VALID) {
+            if (!s_rainSensorBad) {
+                s_rainSensorBad = true;
+                Serial.printf("[RAIN] Implausible reading raw=%u — sensor "
+                              "disconnected or shorted, assuming DRY\n",
+                              (unsigned)raw);
+            }
+            s_rainState  = false;
+            s_rainStable = 0;
         } else {
-            s_rainStable   = 1;
-            s_rainLastRead = curRead;
+            if (s_rainSensorBad) {
+                s_rainSensorBad = false;
+                Serial.printf("[RAIN] Sensor reading back to normal: raw=%u\n",
+                              (unsigned)raw);
+            }
+
+            // Гистерезис: пороги входа и выхода разные, между ними состояние
+            // не меняется вовсе. Без этого на границе шло бы дребезжание.
+            bool curRead = s_rainState;
+            if (raw <= RAIN_ADC_WET)      curRead = true;
+            else if (raw >= RAIN_ADC_DRY) curRead = false;
+
+            if (curRead == s_rainLastRead) {
+                if (s_rainStable < RAIN_STABLE_COUNT) s_rainStable++;
+            } else {
+                s_rainStable   = 1;
+                s_rainLastRead = curRead;
+            }
+            if (s_rainStable >= RAIN_STABLE_COUNT && s_rainState != curRead) {
+                s_rainState = curRead;
+                Serial.printf("[RAIN] %s (raw=%u, thresholds %u/%u)\n",
+                    s_rainState ? "RAIN detected" : "DRY",
+                    (unsigned)raw, (unsigned)RAIN_ADC_WET, (unsigned)RAIN_ADC_DRY);
+            }
         }
-        if (s_rainStable >= RAIN_STABLE_COUNT && s_rainState != curRead) {
-            s_rainState = curRead;
-            Serial.printf("[RAIN] %s\n", s_rainState ? "RAIN detected" : "DRY");
-        }
-        tmp.rain = s_rainState;
+        tmp.rain    = s_rainState;
+        tmp.rainRaw = raw;
     }
 
     // ── AJ-SR04M через RMT RX ────────────────────────────────────

@@ -24,9 +24,10 @@
 //  ВНУТРЕННЕЕ СОСТОЯНИЕ
 // ═══════════════════════════════════════════════════════════════════
 enum PumpState : uint8_t {
-    PUMP_IDLE    = 0,   // Ждём срабатывания по низкому уровню
-    PUMP_PUMPING = 1,   // Насос работает
-    PUMP_FAULT   = 2    // Авария (превышен таймаут)
+    PUMP_IDLE         = 0,   // Ждём срабатывания по низкому уровню
+    PUMP_PUMPING      = 1,   // Насос работает
+    PUMP_FAULT        = 2,   // Авария (превышен таймаут)
+    PUMP_SENSOR_FAULT = 3    // v6.2: датчик уровня не отвечает
 };
 
 static PumpState s_state           = PUMP_IDLE;
@@ -43,13 +44,14 @@ static uint64_t  s_lastDbgMs       = 0;
 // ═══════════════════════════════════════════════════════════════════
 
 // Принудительное выключение реле насоса (защита, авария)
+// v6.2: через RelayMgr::forceOff(), а не setRelay(). setRelay в первую
+// секунду после включения возвращает false из-за антидребезга и НИЧЕГО
+// не выключает — а это функция аварийного отключения.
 static void forceOff(const char* reason) {
     if (RelayMgr::getState(RELAY_IDX_WATER_PUMP)) {
-        if (RelayMgr::setRelay(RELAY_IDX_WATER_PUMP, false)) {
-            Serial.printf("[PUMP] Force OFF: %s\n", reason);
-            WsHandler::notifyRelayChange(RELAY_IDX_WATER_PUMP);
-        }
+        Serial.printf("[PUMP] Force OFF: %s\n", reason);
     }
+    RelayMgr::forceOff(RELAY_IDX_WATER_PUMP);
 }
 
 // Переход в состояние FAULT
@@ -111,13 +113,20 @@ void WaterPumpCtrl::update(float waterLevelPct) {
             Serial.println(F("[PUMP] Water sensor NaN — forcing OFF"));
         }
         forceOff("water sensor NaN");
-        // Остаёмся в текущем состоянии (не переходим в FAULT —
-        // это временная недоступность датчика, а не реальная авария)
+        // v6.2: раньше состояние оставалось прежним. Если насос был
+        // в PUMPING, после возврата датчика цикл продолжался со старым
+        // s_pumpStartMs — то есть в отсчёт таймаута попадало время, когда
+        // насос стоял, и авария могла сработать раньше срока.
+        s_state = PUMP_SENSOR_FAULT;
         return;
     }
     if (s_sensorFailed) {
         s_sensorFailed = false;
         Serial.printf("[PUMP] Water sensor recovered: %.1f%%\n", waterLevelPct);
+    }
+    if (s_state == PUMP_SENSOR_FAULT) {
+        // Датчик вернулся — начинаем цикл с чистого листа.
+        s_state = PUMP_IDLE;
     }
 
     // ── Проверка корректности порогов ────────────────────────────
@@ -169,8 +178,24 @@ void WaterPumpCtrl::update(float waterLevelPct) {
             if (nowMs - s_faultStartMs >= FAULT_AUTO_RESET_MS) {
                 Serial.println(F("[PUMP] FAULT auto-reset after 1 hour"));
                 s_state = PUMP_IDLE;
+                break;
             }
-            // В FAULT реле гарантированно OFF (forceOff было в enterFault)
+            // v6.2: здесь стоял комментарий «в FAULT реле гарантированно
+            // OFF», но гарантии не было: enterFault() звал forceOff() один
+            // раз, и если тот отказал, повторить было негде — единственная
+            // ветка без ретрая во всём модуле. Держим реле выключенным.
+            if (RelayMgr::getState(RELAY_IDX_WATER_PUMP)) {
+                forceOff("still in FAULT");
+            }
+            break;
+        }
+
+        case PUMP_SENSOR_FAULT: {
+            // Ждём валидных показаний. Реле держим выключенным: без
+            // датчика уровня насос управляться не может.
+            if (RelayMgr::getState(RELAY_IDX_WATER_PUMP)) {
+                forceOff("sensor unavailable");
+            }
             break;
         }
     }
@@ -178,8 +203,10 @@ void WaterPumpCtrl::update(float waterLevelPct) {
     // ── Отладочный вывод раз в 30 сек ────────────────────────────
     if (nowMs - s_lastDbgMs >= 30000ULL) {
         s_lastDbgMs = nowMs;
-        const char* stateStr = (s_state == PUMP_IDLE) ? "IDLE"
-                             : (s_state == PUMP_PUMPING) ? "PUMPING" : "FAULT";
+        const char* stateStr = (s_state == PUMP_IDLE)         ? "IDLE"
+                             : (s_state == PUMP_PUMPING)      ? "PUMPING"
+                             : (s_state == PUMP_SENSOR_FAULT) ? "SENSOR_FAULT"
+                                                              : "FAULT";
         Serial.printf("[PUMP] level=%.1f%% target=[%u..%u] state=%s\n",
             waterLevelPct, (unsigned)lowPct, (unsigned)highPct, stateStr);
     }
