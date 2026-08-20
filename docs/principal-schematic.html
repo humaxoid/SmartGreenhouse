@@ -1,0 +1,684 @@
+<meta charset="utf-8">
+<title>Smart Greenhouse — принципиальная схема</title>
+<style>
+:root{
+  --bg:#eef1ec; --surface:#ffffff; --surface-2:#e3e9e0;
+  --ink:#12201a; --muted:#5c6b60; --border:#c9d2c6;
+  --accent:#1f8f5f; --copper:#a8703a;
+  --w-power:#b23b2f; --w-jdvcc:#a8703a; --w-gnd:#5c6b60; --w-i2c:#2f6fb0;
+  --w-sensor:#7a4fb0; --w-relay:#a97a10; --w-button:#1a8f78; --warn:#a97a10;
+  --font-mono: ui-monospace,"Cascadia Code","Consolas","SFMono-Regular",Menlo,monospace;
+  --font-body: -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0b1a14; --surface:#102419; --surface-2:#153020;
+    --ink:#dfe9e1; --muted:#8ea095; --border:#25402f;
+    --accent:#3bd08e; --copper:#d69a5c;
+    --w-power:#e2685c; --w-jdvcc:#d69a5c; --w-gnd:#8ea095; --w-i2c:#72aee6;
+    --w-sensor:#bb95ea; --w-relay:#e6bd4d; --w-button:#4fd6ba; --warn:#e6bd4d;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1a14; --surface:#102419; --surface-2:#153020;
+  --ink:#dfe9e1; --muted:#8ea095; --border:#25402f;
+  --accent:#3bd08e; --copper:#d69a5c;
+  --w-power:#e2685c; --w-jdvcc:#d69a5c; --w-gnd:#8ea095; --w-i2c:#72aee6;
+  --w-sensor:#bb95ea; --w-relay:#e6bd4d; --w-button:#4fd6ba; --warn:#e6bd4d;
+}
+:root[data-theme="light"]{
+  --bg:#eef1ec; --surface:#ffffff; --surface-2:#e3e9e0;
+  --ink:#12201a; --muted:#5c6b60; --border:#c9d2c6;
+  --accent:#1f8f5f; --copper:#a8703a;
+  --w-power:#b23b2f; --w-jdvcc:#a8703a; --w-gnd:#5c6b60; --w-i2c:#2f6fb0;
+  --w-sensor:#7a4fb0; --w-relay:#a97a10; --w-button:#1a8f78; --warn:#a97a10;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--font-body)}
+body{padding:32px 20px 64px}
+main{max-width:1220px;margin:0 auto;display:flex;flex-direction:column;gap:32px}
+.titleblock{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;border-bottom:2px solid var(--ink);padding-bottom:16px;flex-wrap:wrap}
+.titleblock h1{font-family:var(--font-mono);font-size:clamp(19px,3vw,26px);letter-spacing:.02em;margin:0 0 6px;font-weight:700;text-wrap:balance}
+.titleblock p{margin:0;color:var(--muted);font-size:14px}
+.rev{font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:right;border:1px solid var(--border);border-radius:6px;padding:8px 12px;line-height:1.6;background:var(--surface)}
+.rev b{color:var(--ink)}
+.diagram-wrap{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 18px 8px}
+.diagram-wrap svg{width:100%;height:auto;display:block}
+figcaption{font-size:13px;color:var(--muted);padding:10px 6px 16px;line-height:1.6}
+.notes{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px 24px}
+.notes h2{font-family:var(--font-mono);font-size:14px;text-transform:uppercase;letter-spacing:.04em;margin:0 0 14px;color:var(--muted)}
+.notes ol{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:10px;font-size:14.5px;line-height:1.55}
+.notes li::marker{font-family:var(--font-mono);color:var(--accent);font-weight:700}
+.notes b{color:var(--ink)}
+.caveat{background:var(--surface-2);border:1px dashed var(--border);border-radius:10px;padding:14px 18px;font-size:13.5px;line-height:1.55;color:var(--ink)}
+.caveat b{color:var(--warn)}
+footer{font-size:12.5px;color:var(--muted);text-align:center;padding-top:8px}
+footer a{color:var(--accent)}
+</style>
+
+<main>
+  <div class="titleblock">
+    <div>
+      <h1>SMART GREENHOUSE — ПРИНЦИПИАЛЬНАЯ СХЕМА</h1>
+      <p>ESP32 DOIT DevKit V1 · условные обозначения IEC 60617 · по include/config.h + README</p>
+    </div>
+    <div class="rev">REV&nbsp;B&nbsp;·&nbsp;<b>2026-08-10</b><br>humaxoid/SmartGreenhouse</div>
+  </div>
+
+  <div class="caveat">
+    <b>⚠ Важно перед чтением:</b> элементы защиты и типовые номиналы (F1/F2, D1/D2, C1/C2, делитель R5/R6, опто-каскад U/Q в блоке C, стабилизатор U1) в проекте явно не документированы — это стандартная инженерная практика, добавленная поверх подтверждённой распиновки. GPIO-номера и обязательный pull-down на GPIO15 — из <span style="font-family:var(--font-mono)">config.h</span>/README и достоверны; номиналы резисторов/предохранителей/опто-модуля — сверьте по паспорту вашего конкретного реле-модуля и БП.
+  </div>
+
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 1900 1740" role="img" aria-label="Принципиальная схема Smart Greenhouse: питание с защитой, ESP32 DOIT DevKit V1, типовой опто-релейный канал, блок катушек реле K1-K9, силовая часть с реверсивными приводами форточек, шина I2C, датчики и кнопки">
+
+      <!-- ===================== LEGEND ===================== -->
+      <g font-family="var(--font-mono)" font-size="12.5" fill="var(--ink)">
+        <line x1="60" y1="40" x2="88" y2="40" stroke="var(--w-power)" stroke-width="4"/><text x="96" y="44">Питание лог.</text>
+        <line x1="250" y1="40" x2="278" y2="40" stroke="var(--w-jdvcc)" stroke-width="4"/><text x="286" y="44">JD-VCC (силовая)</text>
+        <line x1="470" y1="40" x2="498" y2="40" stroke="var(--w-gnd)" stroke-width="4" stroke-dasharray="6 4"/><text x="506" y="44">GND</text>
+        <line x1="580" y1="40" x2="608" y2="40" stroke="var(--w-i2c)" stroke-width="4"/><text x="616" y="44">I²C</text>
+        <line x1="690" y1="40" x2="718" y2="40" stroke="var(--w-sensor)" stroke-width="4"/><text x="726" y="44">Датчики</text>
+        <line x1="850" y1="40" x2="878" y2="40" stroke="var(--w-relay)" stroke-width="4"/><text x="886" y="44">Реле-упр.</text>
+        <line x1="1020" y1="40" x2="1048" y2="40" stroke="var(--w-button)" stroke-width="4"/><text x="1056" y="44">Кнопки</text>
+        <text x="1840" y="44" text-anchor="end" fill="var(--muted)">● + подпись = точка цепи; одинаковая подпись = одно соединение</text>
+      </g>
+      <line x1="40" y1="58" x2="1860" y2="58" stroke="var(--border)"/>
+
+      <!-- symbol legend -->
+      <g font-family="var(--font-mono)" font-size="11" fill="var(--muted)">
+        <!-- resistor -->
+        <polyline points="60,95 68,88 76,102 84,88 92,102 100,95" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="106" y="99">R — резистор</text>
+        <!-- capacitor -->
+        <line x1="250" y1="86" x2="250" y2="104" stroke="var(--ink)" stroke-width="1.6"/>
+        <line x1="258" y1="86" x2="258" y2="104" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="270" y="99">C — конденсатор</text>
+        <!-- diode -->
+        <polygon points="400,88 400,102 414,95" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+        <line x1="414" y1="88" x2="414" y2="102" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="426" y="99">D — диод</text>
+        <!-- coil -->
+        <rect x="540" y="86" width="30" height="18" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="580" y="99">K — обмотка реле</text>
+        <!-- NO contact -->
+        <circle cx="740" cy="95" r="2.4" fill="var(--ink)"/><circle cx="770" cy="95" r="2.4" fill="var(--ink)"/>
+        <line x1="742" y1="94" x2="762" y2="84" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="778" y="99">— контакт р.з.</text>
+        <!-- ground -->
+        <line x1="960" y1="86" x2="960" y2="96" stroke="var(--ink)" stroke-width="1.6"/>
+        <line x1="948" y1="96" x2="972" y2="96" stroke="var(--ink)" stroke-width="1.6"/>
+        <line x1="952" y1="101" x2="968" y2="101" stroke="var(--ink)" stroke-width="1.6"/>
+        <line x1="956" y1="106" x2="964" y2="106" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="978" y="99">— общий провод</text>
+        <!-- fuse -->
+        <rect x="1130" y="88" width="34" height="14" rx="7" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+        <line x1="1130" y1="95" x2="1164" y2="95" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="1172" y="99">F — предохранитель</text>
+      </g>
+      <line x1="40" y1="118" x2="1860" y2="118" stroke="var(--border)"/>
+
+      <!-- ===================== SECTION A: POWER ===================== -->
+      <rect x="40" y="150" width="560" height="330" rx="12" fill="var(--surface-2)" stroke="var(--border)"/>
+      <text x="62" y="176" font-family="var(--font-mono)" font-size="13" font-weight="700" fill="var(--ink)">A · ПИТАНИЕ</text>
+
+      <!-- PS1 logic -->
+      <circle cx="80" cy="230" r="4" fill="var(--w-power)"/>
+      <text x="80" y="214" text-anchor="middle" font-size="11" fill="var(--muted)">5В, лог.</text>
+      <line x1="80" y1="230" x2="150" y2="230" stroke="var(--w-power)" stroke-width="2"/>
+      <rect x="150" y="223" width="34" height="14" rx="7" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="150" y1="230" x2="184" y2="230" stroke="var(--ink)" stroke-width="1.6"/>
+      <text x="167" y="252" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">F1 0.5А</text>
+      <line x1="184" y1="230" x2="225" y2="230" stroke="var(--w-power)" stroke-width="2"/>
+      <polygon points="225,222 225,238 241,230" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="241" y1="222" x2="241" y2="238" stroke="var(--ink)" stroke-width="1.6"/>
+      <text x="233" y="252" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">D1</text>
+      <line x1="241" y1="230" x2="300" y2="230" stroke="var(--w-power)" stroke-width="2"/>
+      <circle cx="300" cy="230" r="3" fill="var(--ink)"/>
+      <line x1="300" y1="230" x2="300" y2="255" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="288" y1="255" x2="288" y2="270" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="296" y1="255" x2="296" y2="270" stroke="var(--ink)" stroke-width="1.6"/>
+      <text x="270" y="266" text-anchor="end" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">C1 100мкФ</text>
+      <line x1="292" y1="270" x2="292" y2="295" stroke="var(--w-gnd)" stroke-width="2" stroke-dasharray="5 3"/>
+      <line x1="300" y1="230" x2="520" y2="230" stroke="var(--w-power)" stroke-width="2"/>
+      <circle cx="520" cy="230" r="5" fill="var(--w-power)"/>
+      <text x="530" y="234" font-family="var(--font-mono)" font-size="12" font-weight="700" fill="var(--w-power)">+5V (VIN)</text>
+
+      <!-- GND rail 1 -->
+      <line x1="270" y1="295" x2="520" y2="295" stroke="var(--w-gnd)" stroke-width="2" stroke-dasharray="5 3"/>
+      <line x1="270" y1="295" x2="270" y2="305" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="260" y1="305" x2="280" y2="305" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="264" y1="310" x2="276" y2="310" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="268" y1="315" x2="272" y2="315" stroke="var(--ink)" stroke-width="1.6"/>
+      <circle cx="520" cy="295" r="5" fill="var(--w-gnd)"/>
+      <text x="530" y="299" font-family="var(--font-mono)" font-size="12" font-weight="700" fill="var(--w-gnd)">GND</text>
+
+      <!-- PS2 power -->
+      <circle cx="80" cy="380" r="4" fill="var(--w-jdvcc)"/>
+      <text x="80" y="364" text-anchor="middle" font-size="11" fill="var(--muted)">5–12В, силовая</text>
+      <line x1="80" y1="380" x2="150" y2="380" stroke="var(--w-jdvcc)" stroke-width="2"/>
+      <rect x="150" y="373" width="34" height="14" rx="7" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="150" y1="380" x2="184" y2="380" stroke="var(--ink)" stroke-width="1.6"/>
+      <text x="167" y="402" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">F2 2А</text>
+      <line x1="184" y1="380" x2="225" y2="380" stroke="var(--w-jdvcc)" stroke-width="2"/>
+      <polygon points="225,372 225,388 241,380" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="241" y1="372" x2="241" y2="388" stroke="var(--ink)" stroke-width="1.6"/>
+      <text x="233" y="402" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">D2</text>
+      <line x1="241" y1="380" x2="300" y2="380" stroke="var(--w-jdvcc)" stroke-width="2"/>
+      <circle cx="300" cy="380" r="3" fill="var(--ink)"/>
+      <line x1="300" y1="380" x2="300" y2="405" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="288" y1="405" x2="288" y2="420" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="296" y1="405" x2="296" y2="420" stroke="var(--ink)" stroke-width="1.6"/>
+      <text x="270" y="416" text-anchor="end" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">C2 470мкФ</text>
+      <line x1="292" y1="420" x2="292" y2="445" stroke="var(--w-gnd)" stroke-width="2" stroke-dasharray="5 3"/>
+      <line x1="300" y1="380" x2="520" y2="380" stroke="var(--w-jdvcc)" stroke-width="2"/>
+      <circle cx="520" cy="380" r="5" fill="var(--w-jdvcc)"/>
+      <text x="530" y="384" font-family="var(--font-mono)" font-size="12" font-weight="700" fill="var(--w-jdvcc)">+JDVCC</text>
+
+      <!-- GND rail 2 -->
+      <line x1="270" y1="445" x2="520" y2="445" stroke="var(--w-gnd)" stroke-width="2" stroke-dasharray="5 3"/>
+      <line x1="270" y1="445" x2="270" y2="455" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="260" y1="455" x2="280" y2="455" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="264" y1="460" x2="276" y2="460" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="268" y1="465" x2="272" y2="465" stroke="var(--ink)" stroke-width="1.6"/>
+      <circle cx="520" cy="445" r="5" fill="var(--w-gnd)"/>
+      <text x="530" y="449" font-family="var(--font-mono)" font-size="12" font-weight="700" fill="var(--w-gnd)">GND</text>
+      <text x="62" y="472" font-size="11" fill="var(--muted)">Силовая часть развязана от логики — общий только GND.</text>
+
+      <!-- ===================== SECTION E: I2C ===================== -->
+      <rect x="40" y="510" width="560" height="190" rx="12" fill="var(--surface-2)" stroke="var(--border)"/>
+      <text x="62" y="536" font-family="var(--font-mono)" font-size="13" font-weight="700" fill="var(--ink)">E · ШИНА I²C</text>
+
+      <rect x="70" y="560" width="230" height="110" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+      <text x="185" y="596" text-anchor="middle" font-weight="600" font-size="13.5">BME280</text>
+      <text x="185" y="613" text-anchor="middle" font-size="11" fill="var(--muted)">0x76 · T/влажн./давл.</text>
+      <g font-family="var(--font-mono)" font-size="9.5">
+        <circle cx="90" cy="560" r="4" fill="var(--w-power)"/><text x="90" y="552" text-anchor="middle" fill="var(--w-power)">3V3</text>
+        <circle cx="140" cy="560" r="4" fill="var(--w-gnd)"/><text x="140" y="552" text-anchor="middle" fill="var(--w-gnd)">GND</text>
+        <circle cx="225" cy="560" r="4" fill="var(--w-i2c)"/><text x="225" y="552" text-anchor="middle" fill="var(--w-i2c)">SDA·21</text>
+        <circle cx="275" cy="560" r="4" fill="var(--w-i2c)"/><text x="275" y="552" text-anchor="middle" fill="var(--w-i2c)">SCL·22</text>
+      </g>
+
+      <rect x="330" y="560" width="230" height="110" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+      <text x="445" y="596" text-anchor="middle" font-weight="600" font-size="13.5">BH1750 / GY-30</text>
+      <text x="445" y="613" text-anchor="middle" font-size="11" fill="var(--muted)">0x23 · освещённость</text>
+      <g font-family="var(--font-mono)" font-size="9.5">
+        <circle cx="350" cy="560" r="4" fill="var(--w-power)"/><text x="350" y="552" text-anchor="middle" fill="var(--w-power)">3V3</text>
+        <circle cx="400" cy="560" r="4" fill="var(--w-gnd)"/><text x="400" y="552" text-anchor="middle" fill="var(--w-gnd)">GND</text>
+        <circle cx="485" cy="560" r="4" fill="var(--w-i2c)"/><text x="485" y="552" text-anchor="middle" fill="var(--w-i2c)">SDA·21</text>
+        <circle cx="535" cy="560" r="4" fill="var(--w-i2c)"/><text x="535" y="552" text-anchor="middle" fill="var(--w-i2c)">SCL·22</text>
+      </g>
+      <text x="62" y="690" font-size="11" fill="var(--muted)">Общие подписи SDA·21/SCL·22 у обоих модулей = общая шина I²C (подтяжка 4.7кΩ — обычно уже на платах модулей).</text>
+
+      <!-- ===================== SECTION F: OTHER SENSORS ===================== -->
+      <rect x="40" y="720" width="560" height="330" rx="12" fill="var(--surface-2)" stroke="var(--border)"/>
+      <text x="62" y="746" font-family="var(--font-mono)" font-size="13" font-weight="700" fill="var(--ink)">F · ДАТЧИКИ</text>
+
+      <rect x="70" y="770" width="150" height="90" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+      <text x="145" y="810" text-anchor="middle" font-weight="600" font-size="13">DHT22</text>
+      <text x="145" y="826" text-anchor="middle" font-size="10.5" fill="var(--muted)">улич. т/влажн.</text>
+      <g font-family="var(--font-mono)" font-size="9.5">
+        <circle cx="90" cy="770" r="4" fill="var(--w-power)"/><text x="90" y="762" text-anchor="middle" fill="var(--w-power)">3V3</text>
+        <circle cx="145" cy="770" r="4" fill="var(--w-sensor)"/><text x="145" y="762" text-anchor="middle" fill="var(--w-sensor)">D·13</text>
+        <circle cx="200" cy="770" r="4" fill="var(--w-gnd)"/><text x="200" y="762" text-anchor="middle" fill="var(--w-gnd)">GND</text>
+      </g>
+
+      <rect x="250" y="770" width="150" height="90" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+      <text x="325" y="810" text-anchor="middle" font-weight="600" font-size="13">YL-83</text>
+      <text x="325" y="826" text-anchor="middle" font-size="10.5" fill="var(--muted)">датчик дождя</text>
+      <g font-family="var(--font-mono)" font-size="9.5">
+        <circle cx="270" cy="770" r="4" fill="var(--w-power)"/><text x="270" y="762" text-anchor="middle" fill="var(--w-power)">3V3</text>
+        <circle cx="325" cy="770" r="4" fill="var(--w-sensor)"/><text x="325" y="762" text-anchor="middle" fill="var(--w-sensor)">DO·39</text>
+        <circle cx="380" cy="770" r="4" fill="var(--w-gnd)"/><text x="380" y="762" text-anchor="middle" fill="var(--w-gnd)">GND</text>
+      </g>
+
+      <rect x="430" y="770" width="150" height="90" rx="8" fill="var(--surface)" stroke="var(--border)"/>
+      <text x="505" y="810" text-anchor="middle" font-weight="600" font-size="13">AJ-SR04M</text>
+      <text x="505" y="826" text-anchor="middle" font-size="10.5" fill="var(--muted)">уровень воды</text>
+      <g font-family="var(--font-mono)" font-size="9.5">
+        <circle cx="450" cy="770" r="4" fill="var(--w-power)"/><text x="450" y="762" text-anchor="middle" fill="var(--w-power)">5V</text>
+        <circle cx="505" cy="770" r="4" fill="var(--w-sensor)"/><text x="505" y="762" text-anchor="middle" fill="var(--w-sensor)">TRIG·0</text>
+        <circle cx="560" cy="770" r="4" fill="var(--w-gnd)"/><text x="560" y="762" text-anchor="middle" fill="var(--w-gnd)">GND</text>
+      </g>
+      <!-- echo divider -->
+      <circle cx="505" cy="860" r="4" fill="var(--w-sensor)"/><text x="516" y="864" font-family="var(--font-mono)" font-size="9.5" fill="var(--w-sensor)">ECHO 5V</text>
+      <line x1="505" y1="860" x2="505" y2="885" stroke="var(--w-sensor)" stroke-width="2"/>
+      <polyline points="497,885 505,878 513,892 521,878 513,892 505,885 497,885" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+      <polyline points="497,885 505,878 513,892 521,878 529,892 505,885" fill="none" stroke="var(--ink)" stroke-width="0"/>
+      <text x="540" y="890" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">R5 1кΩ</text>
+      <line x1="505" y1="892" x2="505" y2="915" stroke="var(--w-sensor)" stroke-width="2"/>
+      <circle cx="505" cy="915" r="3" fill="var(--ink)"/>
+      <line x1="505" y1="915" x2="560" y2="915" stroke="var(--w-sensor)" stroke-width="2"/>
+      <circle cx="560" cy="915" r="5" fill="var(--w-sensor)"/>
+      <text x="570" y="919" font-family="var(--font-mono)" font-size="12" font-weight="700" fill="var(--w-sensor)">ECHO→GPIO34</text>
+      <polyline points="497,935 505,928 513,942 521,928 513,942 505,935 497,935" fill="none" stroke="var(--ink)" stroke-width="0"/>
+      <line x1="505" y1="915" x2="505" y2="930" stroke="var(--w-gnd)" stroke-width="2"/>
+      <polyline points="497,930 505,923 513,937 521,923 505,930" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+      <text x="540" y="935" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">R6 2кΩ</text>
+      <line x1="505" y1="937" x2="505" y2="955" stroke="var(--w-gnd)" stroke-width="2" stroke-dasharray="5 3"/>
+      <line x1="493" y1="955" x2="517" y2="955" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="497" y1="960" x2="513" y2="960" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="501" y1="965" x2="509" y2="965" stroke="var(--ink)" stroke-width="1.6"/>
+      <text x="62" y="1030" font-size="11" fill="var(--muted)">R5/R6 — резистивный делитель 5V→3.3V на выходе ECHO (обязателен, вход GPIO34 держит максимум 3.3V).</text>
+
+      <!-- ===================== MCU (B) ===================== -->
+      <rect x="650" y="150" width="460" height="910" rx="16" fill="var(--accent)" fill-opacity="0.08" stroke="var(--accent)" stroke-width="2"/>
+      <!-- onboard LDO -->
+      <rect x="690" y="178" width="380" height="86" rx="8" fill="none" stroke="var(--border)" stroke-dasharray="4 3"/>
+      <text x="880" y="192" text-anchor="middle" font-size="9.5" fill="var(--muted)">на плате DevKit</text>
+      <circle cx="710" cy="221" r="4" fill="var(--w-power)"/><text x="700" y="217" text-anchor="end" font-family="var(--font-mono)" font-size="10.5" fill="var(--w-power)">+5V(VIN)</text>
+      <line x1="714" y1="221" x2="800" y2="221" stroke="var(--w-power)" stroke-width="2"/>
+      <rect x="800" y="204" width="90" height="34" rx="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.6"/>
+      <text x="845" y="225" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" font-weight="700">U1 AMS1117-3.3</text>
+      <line x1="890" y1="221" x2="1050" y2="221" stroke="var(--w-power)" stroke-width="2"/>
+      <circle cx="1050" cy="221" r="4" fill="var(--w-power)"/><text x="1058" y="217" font-family="var(--font-mono)" font-size="10.5" fill="var(--w-power)">+3V3</text>
+      <line x1="845" y1="238" x2="845" y2="255" stroke="var(--w-gnd)" stroke-width="1.6" stroke-dasharray="4 3"/>
+      <text x="845" y="255" text-anchor="middle" font-size="9" fill="var(--muted)" dy="10">GND</text>
+
+      <text x="880" y="300" text-anchor="middle" font-family="var(--font-mono)" font-size="18" font-weight="700">ESP32-WROOM-32</text>
+      <text x="880" y="320" text-anchor="middle" font-family="var(--font-mono)" font-size="11.5" fill="var(--muted)">DOIT DEVKIT V1</text>
+      <circle cx="1010" cy="345" r="5" fill="var(--w-relay)"/><text x="1000" y="341" text-anchor="end" font-family="var(--font-mono)" font-size="9.5" fill="var(--muted)">GPIO2 — LED (встроенный)</text>
+
+      <!-- left pins -->
+      <!-- row order: VIN,GND,3V3,GPIO21,GPIO22,GPIO13,GPIO39,GPIO0,GPIO34 at y 340..980 step80, but VIN/3V3 come from LDO box already at y221; draw stub connectors down to these rows for continuity -->
+      <g font-family="var(--font-mono)" font-size="11.5" font-weight="700">
+        <!-- GND row -->
+        <line x1="650" y1="420" x2="600" y2="420" stroke="var(--w-gnd)" stroke-width="2.5" stroke-dasharray="5 3"/><circle cx="650" cy="420" r="4.5" fill="var(--w-gnd)"/><circle cx="600" cy="420" r="4.5" fill="var(--w-gnd)"/>
+        <text x="592" y="416" text-anchor="end" fill="var(--w-gnd)">GND</text>
+        <!-- SDA -->
+        <line x1="650" y1="500" x2="600" y2="500" stroke="var(--w-i2c)" stroke-width="2.5"/><circle cx="650" cy="500" r="4.5" fill="var(--w-i2c)"/><circle cx="600" cy="500" r="4.5" fill="var(--w-i2c)"/>
+        <text x="592" y="496" text-anchor="end" fill="var(--w-i2c)">GPIO21·SDA</text>
+        <!-- SCL -->
+        <line x1="650" y1="580" x2="600" y2="580" stroke="var(--w-i2c)" stroke-width="2.5"/><circle cx="650" cy="580" r="4.5" fill="var(--w-i2c)"/><circle cx="600" cy="580" r="4.5" fill="var(--w-i2c)"/>
+        <text x="592" y="576" text-anchor="end" fill="var(--w-i2c)">GPIO22·SCL</text>
+        <!-- DHT -->
+        <line x1="650" y1="660" x2="600" y2="660" stroke="var(--w-sensor)" stroke-width="2.5"/><circle cx="650" cy="660" r="4.5" fill="var(--w-sensor)"/><circle cx="600" cy="660" r="4.5" fill="var(--w-sensor)"/>
+        <text x="592" y="656" text-anchor="end" fill="var(--w-sensor)">GPIO13</text>
+        <!-- YL83 -->
+        <line x1="650" y1="740" x2="600" y2="740" stroke="var(--w-sensor)" stroke-width="2.5"/><circle cx="650" cy="740" r="4.5" fill="var(--w-sensor)"/><circle cx="600" cy="740" r="4.5" fill="var(--w-sensor)"/>
+        <text x="592" y="736" text-anchor="end" fill="var(--w-sensor)">GPIO39</text>
+        <!-- TRIG -->
+        <line x1="650" y1="820" x2="600" y2="820" stroke="var(--w-sensor)" stroke-width="2.5"/><circle cx="650" cy="820" r="4.5" fill="var(--w-sensor)"/><circle cx="600" cy="820" r="4.5" fill="var(--w-sensor)"/>
+        <text x="592" y="816" text-anchor="end" fill="var(--w-sensor)">GPIO0 ⚠</text>
+        <!-- ECHO -->
+        <line x1="650" y1="900" x2="600" y2="900" stroke="var(--w-sensor)" stroke-width="2.5"/><circle cx="650" cy="900" r="4.5" fill="var(--w-sensor)"/><circle cx="600" cy="900" r="4.5" fill="var(--w-sensor)"/>
+        <text x="592" y="896" text-anchor="end" fill="var(--w-sensor)">GPIO34</text>
+      </g>
+
+      <!-- right pins: relays -->
+      <g font-family="var(--font-mono)" font-size="11.5" font-weight="700">
+        <line x1="1110" y1="340" x2="1160" y2="340" stroke="var(--w-relay)" stroke-width="2.5"/><circle cx="1110" cy="340" r="4.5" fill="var(--w-relay)"/><circle cx="1160" cy="340" r="4.5" fill="var(--w-relay)"/>
+        <text x="1168" y="336" fill="var(--w-relay)">GPIO25</text>
+        <line x1="1110" y1="410" x2="1160" y2="410" stroke="var(--w-relay)" stroke-width="2.5"/><circle cx="1110" cy="410" r="4.5" fill="var(--w-relay)"/><circle cx="1160" cy="410" r="4.5" fill="var(--w-relay)"/>
+        <text x="1168" y="406" fill="var(--w-relay)">GPIO26</text>
+        <line x1="1110" y1="480" x2="1160" y2="480" stroke="var(--w-relay)" stroke-width="2.5"/><circle cx="1110" cy="480" r="4.5" fill="var(--w-relay)"/><circle cx="1160" cy="480" r="4.5" fill="var(--w-relay)"/>
+        <text x="1168" y="476" fill="var(--w-relay)">GPIO27</text>
+        <line x1="1110" y1="550" x2="1160" y2="550" stroke="var(--w-relay)" stroke-width="2.5"/><circle cx="1110" cy="550" r="4.5" fill="var(--w-relay)"/><circle cx="1160" cy="550" r="4.5" fill="var(--w-relay)"/>
+        <text x="1168" y="546" fill="var(--w-relay)">GPIO32</text>
+        <line x1="1110" y1="620" x2="1160" y2="620" stroke="var(--w-relay)" stroke-width="2.5"/><circle cx="1110" cy="620" r="4.5" fill="var(--w-relay)"/><circle cx="1160" cy="620" r="4.5" fill="var(--w-relay)"/>
+        <text x="1168" y="616" fill="var(--w-relay)">GPIO4</text>
+        <line x1="1110" y1="690" x2="1160" y2="690" stroke="var(--w-relay)" stroke-width="2.5"/><circle cx="1110" cy="690" r="4.5" fill="var(--w-relay)"/><circle cx="1160" cy="690" r="4.5" fill="var(--w-relay)"/>
+        <text x="1168" y="686" fill="var(--w-relay)">GPIO33</text>
+        <line x1="1110" y1="760" x2="1160" y2="760" stroke="var(--w-relay)" stroke-width="2.5"/><circle cx="1110" cy="760" r="4.5" fill="var(--w-relay)"/><circle cx="1160" cy="760" r="4.5" fill="var(--w-relay)"/>
+        <text x="1168" y="756" fill="var(--w-relay)">GPIO15 ⚠</text>
+        <line x1="1110" y1="830" x2="1160" y2="830" stroke="var(--w-relay)" stroke-width="2.5"/><circle cx="1110" cy="830" r="4.5" fill="var(--w-relay)"/><circle cx="1160" cy="830" r="4.5" fill="var(--w-relay)"/>
+        <text x="1168" y="826" fill="var(--w-relay)">GPIO14</text>
+        <line x1="1110" y1="900" x2="1160" y2="900" stroke="var(--w-relay)" stroke-width="2.5"/><circle cx="1110" cy="900" r="4.5" fill="var(--w-relay)"/><circle cx="1160" cy="900" r="4.5" fill="var(--w-relay)"/>
+        <text x="1168" y="896" fill="var(--w-relay)">GPIO5</text>
+      </g>
+
+      <!-- bottom pins: buttons — referenced by net label only (see block G), no physical stub drawn here to avoid crossing the power-stage frame below -->
+      <text x="880" y="1040" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" fill="var(--w-button)">GPIO16 · 17 · 18 · 19 · 23 → см. блок G «Кнопки»</text>
+
+      <!-- ===================== SECTION C: TYPICAL CHANNEL ===================== -->
+      <rect x="1220" y="150" width="640" height="330" rx="12" fill="var(--surface-2)" stroke="var(--border)"/>
+      <text x="1242" y="176" font-family="var(--font-mono)" font-size="13" font-weight="700" fill="var(--ink)">C · ТИПОВОЙ КАНАЛ РЕЛЕ (K1…K9)</text>
+
+      <circle cx="1255" cy="330" r="5" fill="var(--w-relay)"/><text x="1245" y="322" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" fill="var(--w-relay)">GPIOxx</text>
+      <line x1="1255" y1="330" x2="1300" y2="330" stroke="var(--w-relay)" stroke-width="2"/>
+      <polyline points="1300,330 1308,323 1316,337 1324,323 1332,337 1340,330" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+      <text x="1320" y="350" text-anchor="middle" font-family="var(--font-mono)" font-size="10" fill="var(--muted)">R 220Ω</text>
+      <line x1="1340" y1="330" x2="1380" y2="330" stroke="var(--w-relay)" stroke-width="2"/>
+
+      <rect x="1380" y="300" width="90" height="60" rx="6" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-dasharray="4 3"/>
+      <polygon points="1400,318 1400,342 1418,330" fill="none" stroke="var(--ink)" stroke-width="1.4"/>
+      <line x1="1418" y1="318" x2="1418" y2="342" stroke="var(--ink)" stroke-width="1.4"/>
+      <line x1="1424" y1="322" x2="1436" y2="314" stroke="var(--ink)" stroke-width="1.2"/>
+      <line x1="1424" y1="332" x2="1436" y2="324" stroke="var(--ink)" stroke-width="1.2"/>
+      <line x1="1440" y1="316" x2="1440" y2="344" stroke="var(--ink)" stroke-width="1.4"/>
+      <line x1="1440" y1="320" x2="1455" y2="313" stroke="var(--ink)" stroke-width="1.4"/>
+      <line x1="1440" y1="330" x2="1455" y2="337" stroke="var(--ink)" stroke-width="1.4"/>
+      <text x="1425" y="376" text-anchor="middle" font-family="var(--font-mono)" font-size="10" fill="var(--muted)">U — опто (тип PC817)</text>
+
+      <line x1="1470" y1="330" x2="1510" y2="330" stroke="var(--w-relay)" stroke-width="2"/>
+      <!-- transistor Q: base bar at x=1510, collector up to coil, emitter down to GND -->
+      <line x1="1510" y1="310" x2="1510" y2="350" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="1510" y1="317" x2="1530" y2="303" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="1530" y1="303" x2="1530" y2="250" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="1510" y1="343" x2="1530" y2="357" stroke="var(--ink)" stroke-width="1.6"/>
+      <polygon points="1530,357 1520,353 1524,347" fill="var(--ink)"/>
+      <line x1="1530" y1="357" x2="1530" y2="400" stroke="var(--ink)" stroke-width="1.6"/>
+      <text x="1500" y="286" text-anchor="end" font-family="var(--font-mono)" font-size="10.5" fill="var(--ink)" font-weight="700">Q — ключ</text>
+
+      <!-- coil K + flyback diode D, in parallel between +JDVCC and collector node -->
+      <circle cx="1530" cy="175" r="5" fill="var(--w-jdvcc)"/><text x="1540" y="171" font-family="var(--font-mono)" font-size="11" font-weight="700" fill="var(--w-jdvcc)">+JDVCC</text>
+      <line x1="1530" y1="180" x2="1530" y2="210" stroke="var(--w-jdvcc)" stroke-width="2"/>
+      <circle cx="1530" cy="210" r="2.6" fill="var(--ink)"/>
+      <line x1="1530" y1="210" x2="1590" y2="210" stroke="var(--ink)" stroke-width="1.6"/>
+      <rect x="1495" y="210" width="70" height="40" rx="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.6"/>
+      <text x="1530" y="234" text-anchor="middle" font-family="var(--font-mono)" font-size="11" font-weight="700">K</text>
+      <circle cx="1530" cy="250" r="2.6" fill="var(--ink)"/>
+      <line x1="1530" y1="250" x2="1590" y2="250" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="1590" y1="210" x2="1590" y2="220" stroke="var(--warn)" stroke-width="1.6"/>
+      <polygon points="1580,245 1600,245 1590,220" fill="none" stroke="var(--warn)" stroke-width="1.6"/>
+      <line x1="1580" y1="245" x2="1600" y2="245" stroke="var(--warn)" stroke-width="1.6"/>
+      <line x1="1590" y1="245" x2="1590" y2="250" stroke="var(--warn)" stroke-width="1.6"/>
+      <text x="1605" y="234" font-family="var(--font-mono)" font-size="10" fill="var(--warn)">D защитный</text>
+
+      <circle cx="1530" cy="415" r="5" fill="var(--w-gnd)"/><text x="1540" y="419" font-family="var(--font-mono)" font-size="11" font-weight="700" fill="var(--w-gnd)">GND</text>
+      <line x1="1530" y1="400" x2="1530" y2="410" stroke="var(--w-gnd)" stroke-width="2"/>
+
+      <!-- contact side (mechanically linked to K, drawn separately as it belongs to the load circuit) -->
+      <text x="1720" y="290" text-anchor="middle" font-family="var(--font-mono)" font-size="10.5" font-weight="700">K (контакт)</text>
+      <circle cx="1660" cy="330" r="2.4" fill="var(--ink)"/><circle cx="1740" cy="330" r="2.4" fill="var(--ink)"/>
+      <line x1="1662" y1="329" x2="1720" y2="308" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="1620" y1="330" x2="1660" y2="330" stroke="var(--ink)" stroke-width="1.6"/>
+      <line x1="1740" y1="330" x2="1790" y2="330" stroke="var(--ink)" stroke-width="1.6"/>
+      <circle cx="1790" cy="330" r="5" fill="var(--ink)"/>
+      <text x="1620" y="350" text-anchor="middle" font-family="var(--font-mono)" font-size="9.5" fill="var(--muted)">от +JDVCC/нагрузки</text>
+      <text x="1800" y="334" font-family="var(--font-mono)" font-size="10.5" fill="var(--muted)">→ нагрузка</text>
+      <text x="1242" y="450" font-size="12" fill="var(--muted)">Повторяется для K1…K9 — карта каналов в блоке D, контакты — в «Силовой части».</text>
+
+      <!-- ===================== SECTION D: COIL BANK ===================== -->
+      <rect x="1220" y="510" width="640" height="550" rx="12" fill="var(--surface-2)" stroke="var(--border)"/>
+      <text x="1242" y="536" font-family="var(--font-mono)" font-size="13" font-weight="700" fill="var(--ink)">D · КАТУШКИ РЕЛЕ K1–K9 (управление)</text>
+      <line x1="1250" y1="558" x2="1830" y2="558" stroke="var(--w-jdvcc)" stroke-width="2"/>
+      <circle cx="1250" cy="558" r="4.5" fill="var(--w-jdvcc)"/><text x="1240" y="554" text-anchor="end" font-family="var(--font-mono)" font-size="10" fill="var(--w-jdvcc)">+JDVCC</text>
+      <line x1="1250" y1="1030" x2="1830" y2="1030" stroke="var(--w-gnd)" stroke-width="2" stroke-dasharray="5 3"/>
+      <circle cx="1250" cy="1030" r="4.5" fill="var(--w-gnd)"/><text x="1240" y="1026" text-anchor="end" font-family="var(--font-mono)" font-size="10" fill="var(--w-gnd)">GND</text>
+
+      <!-- 9 rows helper macro repeated manually -->
+      <!-- row Y positions: 585,633,681,729,777,825,873,921,969 -->
+      <g font-family="var(--font-mono)" font-size="11">
+        <!-- K1 -->
+        <circle cx="1270" cy="585" r="4.5" fill="var(--w-relay)"/><text x="1260" y="581" text-anchor="end" fill="var(--w-relay)">GPIO25</text>
+        <line x1="1274" y1="585" x2="1330" y2="585" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1330" y="571" width="100" height="28" rx="4" fill="var(--surface)" stroke="var(--border)"/><text x="1380" y="590" text-anchor="middle" font-size="9.5" fill="var(--muted)">опто+Q, см.C</text>
+        <line x1="1430" y1="585" x2="1470" y2="585" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1470" y="569" width="46" height="32" rx="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.4"/><text x="1493" y="589" text-anchor="middle" font-weight="700">K1</text>
+        <line x1="1493" y1="569" x2="1493" y2="558" stroke="var(--w-jdvcc)" stroke-width="1.4"/>
+        <line x1="1516" y1="585" x2="1830" y2="585" stroke="var(--ink)" stroke-width="1" stroke-dasharray="2 3"/>
+        <text x="1560" y="581" fill="var(--ink)" font-weight="600">Клапан полива 1</text>
+
+        <!-- K2 -->
+        <circle cx="1270" cy="633" r="4.5" fill="var(--w-relay)"/><text x="1260" y="629" text-anchor="end" fill="var(--w-relay)">GPIO26</text>
+        <line x1="1274" y1="633" x2="1330" y2="633" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1330" y="619" width="100" height="28" rx="4" fill="var(--surface)" stroke="var(--border)"/><text x="1380" y="638" text-anchor="middle" font-size="9.5" fill="var(--muted)">опто+Q, см.C</text>
+        <line x1="1430" y1="633" x2="1470" y2="633" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1470" y="617" width="46" height="32" rx="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.4"/><text x="1493" y="637" text-anchor="middle" font-weight="700">K2</text>
+        <line x1="1516" y1="633" x2="1830" y2="633" stroke="var(--ink)" stroke-width="1" stroke-dasharray="2 3"/>
+        <text x="1560" y="629" fill="var(--ink)" font-weight="600">Клапан полива 2</text>
+
+        <!-- K3 -->
+        <circle cx="1270" cy="681" r="4.5" fill="var(--w-relay)"/><text x="1260" y="677" text-anchor="end" fill="var(--w-relay)">GPIO27</text>
+        <line x1="1274" y1="681" x2="1330" y2="681" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1330" y="667" width="100" height="28" rx="4" fill="var(--surface)" stroke="var(--border)"/><text x="1380" y="686" text-anchor="middle" font-size="9.5" fill="var(--muted)">опто+Q, см.C</text>
+        <line x1="1430" y1="681" x2="1470" y2="681" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1470" y="665" width="46" height="32" rx="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.4"/><text x="1493" y="685" text-anchor="middle" font-weight="700">K3</text>
+        <line x1="1516" y1="681" x2="1830" y2="681" stroke="var(--ink)" stroke-width="1" stroke-dasharray="2 3"/>
+        <text x="1560" y="677" fill="var(--ink)" font-weight="600">Клапан полива 3</text>
+
+        <!-- K4 -->
+        <circle cx="1270" cy="729" r="4.5" fill="var(--w-relay)"/><text x="1260" y="725" text-anchor="end" fill="var(--w-relay)">GPIO32</text>
+        <line x1="1274" y1="729" x2="1330" y2="729" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1330" y="715" width="100" height="28" rx="4" fill="var(--surface)" stroke="var(--border)"/><text x="1380" y="734" text-anchor="middle" font-size="9.5" fill="var(--muted)">опто+Q, см.C</text>
+        <line x1="1430" y1="729" x2="1470" y2="729" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1470" y="713" width="46" height="32" rx="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.4"/><text x="1493" y="733" text-anchor="middle" font-weight="700">K4</text>
+        <line x1="1516" y1="729" x2="1830" y2="729" stroke="var(--ink)" stroke-width="1" stroke-dasharray="2 3"/>
+        <text x="1560" y="722" fill="var(--ink)" font-weight="600">Форточка ВЕРХ · открыть</text>
+        <text x="1560" y="736" font-size="9.5" fill="var(--muted)">реверс M(верх), см. «Силовую часть»</text>
+
+        <!-- K5 -->
+        <circle cx="1270" cy="777" r="4.5" fill="var(--w-relay)"/><text x="1260" y="773" text-anchor="end" fill="var(--w-relay)">GPIO4</text>
+        <line x1="1274" y1="777" x2="1330" y2="777" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1330" y="763" width="100" height="28" rx="4" fill="var(--surface)" stroke="var(--border)"/><text x="1380" y="782" text-anchor="middle" font-size="9.5" fill="var(--muted)">опто+Q, см.C</text>
+        <line x1="1430" y1="777" x2="1470" y2="777" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1470" y="761" width="46" height="32" rx="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.4"/><text x="1493" y="781" text-anchor="middle" font-weight="700">K5</text>
+        <line x1="1516" y1="777" x2="1830" y2="777" stroke="var(--ink)" stroke-width="1" stroke-dasharray="2 3"/>
+        <text x="1560" y="770" fill="var(--ink)" font-weight="600">Форточка ВЕРХ · закрыть</text>
+        <text x="1560" y="784" font-size="9.5" fill="var(--muted)">реверс M(верх), см. «Силовую часть»</text>
+
+        <!-- K6 -->
+        <circle cx="1270" cy="825" r="4.5" fill="var(--w-relay)"/><text x="1260" y="821" text-anchor="end" fill="var(--w-relay)">GPIO33</text>
+        <line x1="1274" y1="825" x2="1330" y2="825" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1330" y="811" width="100" height="28" rx="4" fill="var(--surface)" stroke="var(--border)"/><text x="1380" y="830" text-anchor="middle" font-size="9.5" fill="var(--muted)">опто+Q, см.C</text>
+        <line x1="1430" y1="825" x2="1470" y2="825" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1470" y="809" width="46" height="32" rx="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.4"/><text x="1493" y="829" text-anchor="middle" font-weight="700">K6</text>
+        <line x1="1516" y1="825" x2="1830" y2="825" stroke="var(--ink)" stroke-width="1" stroke-dasharray="2 3"/>
+        <text x="1560" y="818" fill="var(--ink)" font-weight="600">Форточка НИЗ · открыть</text>
+        <text x="1560" y="832" font-size="9.5" fill="var(--muted)">реверс M(низ), см. «Силовую часть»</text>
+
+        <!-- K7 -->
+        <circle cx="1270" cy="873" r="4.5" fill="var(--w-relay)"/><text x="1260" y="869" text-anchor="end" fill="var(--w-relay)">GPIO15⚠</text>
+        <line x1="1274" y1="873" x2="1330" y2="873" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1330" y="859" width="100" height="28" rx="4" fill="var(--surface)" stroke="var(--border)"/><text x="1380" y="878" text-anchor="middle" font-size="9.5" fill="var(--muted)">опто+Q, см.C</text>
+        <line x1="1430" y1="873" x2="1470" y2="873" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1470" y="857" width="46" height="32" rx="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.4"/><text x="1493" y="877" text-anchor="middle" font-weight="700">K7</text>
+        <line x1="1516" y1="873" x2="1830" y2="873" stroke="var(--ink)" stroke-width="1" stroke-dasharray="2 3"/>
+        <text x="1560" y="866" fill="var(--ink)" font-weight="600">Форточка НИЗ · закрыть</text>
+        <text x="1560" y="880" font-size="9.5" fill="var(--warn)">pull-down 10кΩ на GND — обязателен</text>
+        <!-- pulldown glyph -->
+        <line x1="1260" y1="873" x2="1260" y2="887" stroke="var(--warn)" stroke-width="1.6"/>
+        <polyline points="1252,887 1258,882 1264,892 1270,882 1276,892 1260,887" fill="none" stroke="var(--warn)" stroke-width="1.4"/>
+        <line x1="1260" y1="892" x2="1260" y2="901" stroke="var(--w-gnd)" stroke-width="1.6" stroke-dasharray="4 3"/>
+        <text x="1282" y="890" font-size="9" fill="var(--warn)">10кΩ</text>
+
+        <!-- K8 -->
+        <circle cx="1270" cy="921" r="4.5" fill="var(--w-relay)"/><text x="1260" y="917" text-anchor="end" fill="var(--w-relay)">GPIO14</text>
+        <line x1="1274" y1="921" x2="1330" y2="921" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1330" y="907" width="100" height="28" rx="4" fill="var(--surface)" stroke="var(--border)"/><text x="1380" y="926" text-anchor="middle" font-size="9.5" fill="var(--muted)">опто+Q, см.C</text>
+        <line x1="1430" y1="921" x2="1470" y2="921" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1470" y="905" width="46" height="32" rx="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.4"/><text x="1493" y="925" text-anchor="middle" font-weight="700">K8</text>
+        <line x1="1516" y1="921" x2="1830" y2="921" stroke="var(--ink)" stroke-width="1" stroke-dasharray="2 3"/>
+        <text x="1560" y="917" fill="var(--ink)" font-weight="600">Увлажнитель</text>
+
+        <!-- K9 -->
+        <circle cx="1270" cy="969" r="4.5" fill="var(--w-relay)"/><text x="1260" y="965" text-anchor="end" fill="var(--w-relay)">GPIO5</text>
+        <line x1="1274" y1="969" x2="1330" y2="969" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1330" y="955" width="100" height="28" rx="4" fill="var(--surface)" stroke="var(--border)"/><text x="1380" y="974" text-anchor="middle" font-size="9.5" fill="var(--muted)">опто+Q, см.C</text>
+        <line x1="1430" y1="969" x2="1470" y2="969" stroke="var(--w-relay)" stroke-width="2"/>
+        <rect x="1470" y="953" width="46" height="32" rx="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.4"/><text x="1493" y="973" text-anchor="middle" font-weight="700">K9</text>
+        <line x1="1516" y1="969" x2="1830" y2="969" stroke="var(--ink)" stroke-width="1" stroke-dasharray="2 3"/>
+        <text x="1560" y="965" fill="var(--ink)" font-weight="600">Насос скважины</text>
+      </g>
+
+      <!-- vertical JDVCC/GND drop stubs for each coil (visual only, light) -->
+      <g stroke="var(--w-jdvcc)" stroke-width="1" opacity="0.35">
+        <line x1="1493" y1="558" x2="1493" y2="569"/><line x1="1493" y1="558" x2="1493" y2="617"/>
+      </g>
+
+      <!-- ===================== POWER STAGE / LOADS (full width) ===================== -->
+      <rect x="40" y="1090" width="1820" height="380" rx="12" fill="var(--surface-2)" stroke="var(--border)"/>
+      <text x="62" y="1116" font-family="var(--font-mono)" font-size="13" font-weight="700" fill="var(--ink)">СИЛОВАЯ ЧАСТЬ — КОНТАКТЫ РЕЛЕ И НАГРУЗКИ</text>
+
+      <!-- rails common across block -->
+      <line x1="80" y1="1155" x2="1840" y2="1155" stroke="var(--w-jdvcc)" stroke-width="2"/>
+      <circle cx="80" cy="1155" r="4.5" fill="var(--w-jdvcc)"/><text x="66" y="1150" text-anchor="end" font-family="var(--font-mono)" font-size="10.5" fill="var(--w-jdvcc)">+JDVCC</text>
+      <line x1="80" y1="1420" x2="1840" y2="1420" stroke="var(--w-gnd)" stroke-width="2" stroke-dasharray="5 3"/>
+      <circle cx="80" cy="1420" r="4.5" fill="var(--w-gnd)"/><text x="66" y="1416" text-anchor="end" font-family="var(--font-mono)" font-size="10.5" fill="var(--w-gnd)">GND</text>
+
+      <!-- Block1: valves K1-K3 -->
+      <g font-family="var(--font-mono)" font-size="10.5">
+        <line x1="140" y1="1155" x2="140" y2="1210" stroke="var(--ink)" stroke-width="1.6"/>
+        <circle cx="140" cy="1210" r="2.4" fill="var(--ink)"/><circle cx="140" cy="1240" r="2.4" fill="var(--ink)"/>
+        <line x1="140" y1="1212" x2="152" y2="1226" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="152" y="1222" fill="var(--ink)" font-weight="700">K1</text>
+        <line x1="140" y1="1240" x2="140" y2="1280" stroke="var(--ink)" stroke-width="1.6"/>
+        <polygon points="120,1280 140,1300 120,1320" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+        <polygon points="160,1280 140,1300 160,1320" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+        <line x1="140" y1="1320" x2="140" y2="1420" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="140" y="1345" text-anchor="middle" font-size="10.5" fill="var(--muted)">Клапан 1</text>
+
+        <line x1="250" y1="1155" x2="250" y2="1210" stroke="var(--ink)" stroke-width="1.6"/>
+        <circle cx="250" cy="1210" r="2.4" fill="var(--ink)"/><circle cx="250" cy="1240" r="2.4" fill="var(--ink)"/>
+        <line x1="250" y1="1212" x2="262" y2="1226" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="262" y="1222" fill="var(--ink)" font-weight="700">K2</text>
+        <line x1="250" y1="1240" x2="250" y2="1280" stroke="var(--ink)" stroke-width="1.6"/>
+        <polygon points="230,1280 250,1300 230,1320" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+        <polygon points="270,1280 250,1300 270,1320" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+        <line x1="250" y1="1320" x2="250" y2="1420" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="250" y="1345" text-anchor="middle" font-size="10.5" fill="var(--muted)">Клапан 2</text>
+
+        <line x1="360" y1="1155" x2="360" y2="1210" stroke="var(--ink)" stroke-width="1.6"/>
+        <circle cx="360" cy="1210" r="2.4" fill="var(--ink)"/><circle cx="360" cy="1240" r="2.4" fill="var(--ink)"/>
+        <line x1="360" y1="1212" x2="372" y2="1226" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="372" y="1222" fill="var(--ink)" font-weight="700">K3</text>
+        <line x1="360" y1="1240" x2="360" y2="1280" stroke="var(--ink)" stroke-width="1.6"/>
+        <polygon points="340,1280 360,1300 340,1320" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+        <polygon points="380,1280 360,1300 380,1320" fill="none" stroke="var(--ink)" stroke-width="1.6"/>
+        <line x1="360" y1="1320" x2="360" y2="1420" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="360" y="1345" text-anchor="middle" font-size="10.5" fill="var(--muted)">Клапан 3</text>
+      </g>
+
+      <line x1="470" y1="1120" x2="470" y2="1450" stroke="var(--border)"/>
+
+      <!-- Block2: top window reverser -->
+      <g font-family="var(--font-mono)" font-size="10.5">
+        <text x="620" y="1140" text-anchor="middle" font-weight="700" fill="var(--ink)">Форточка ВЕРХ — реверс (42с)</text>
+        <circle cx="600" cy="1285" r="34" fill="none" stroke="var(--ink)" stroke-width="1.8"/>
+        <text x="600" y="1291" text-anchor="middle" font-size="14" font-weight="700">M</text>
+        <!-- K4 switching terminal a -->
+        <line x1="566" y1="1285" x2="520" y2="1285" stroke="var(--ink)" stroke-width="1.6"/>
+        <circle cx="520" cy="1285" r="2.4" fill="var(--ink)"/>
+        <line x1="520" y1="1285" x2="520" y2="1420" stroke="var(--ink)" stroke-width="1.6" stroke-dasharray="5 3"/>
+        <text x="508" y="1355" text-anchor="end" font-size="9.5" fill="var(--muted)">NC·K4</text>
+        <line x1="520" y1="1285" x2="480" y2="1250" stroke="var(--ink)" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <line x1="480" y1="1250" x2="480" y2="1155" stroke="var(--ink)" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <text x="468" y="1210" text-anchor="end" font-size="9.5" fill="var(--muted)">NO·K4</text>
+        <text x="520" y="1275" text-anchor="middle" font-weight="700">K4</text>
+        <!-- K5 switching terminal b -->
+        <line x1="634" y1="1285" x2="680" y2="1285" stroke="var(--ink)" stroke-width="1.6"/>
+        <circle cx="680" cy="1285" r="2.4" fill="var(--ink)"/>
+        <line x1="680" y1="1285" x2="680" y2="1420" stroke="var(--ink)" stroke-width="1.6" stroke-dasharray="5 3"/>
+        <text x="692" y="1355" font-size="9.5" fill="var(--muted)">NC·K5</text>
+        <line x1="680" y1="1285" x2="720" y2="1250" stroke="var(--ink)" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <line x1="720" y1="1250" x2="720" y2="1155" stroke="var(--ink)" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <text x="732" y="1210" font-size="9.5" fill="var(--muted)">NO·K5</text>
+        <text x="680" y="1275" text-anchor="middle" font-weight="700">K5</text>
+      </g>
+
+      <line x1="800" y1="1120" x2="800" y2="1450" stroke="var(--border)"/>
+
+      <!-- Block3: bottom window reverser -->
+      <g font-family="var(--font-mono)" font-size="10.5">
+        <text x="950" y="1140" text-anchor="middle" font-weight="700" fill="var(--ink)">Форточка НИЗ — реверс (24с)</text>
+        <circle cx="930" cy="1285" r="34" fill="none" stroke="var(--ink)" stroke-width="1.8"/>
+        <text x="930" y="1291" text-anchor="middle" font-size="14" font-weight="700">M</text>
+        <line x1="896" y1="1285" x2="850" y2="1285" stroke="var(--ink)" stroke-width="1.6"/>
+        <circle cx="850" cy="1285" r="2.4" fill="var(--ink)"/>
+        <line x1="850" y1="1285" x2="850" y2="1420" stroke="var(--ink)" stroke-width="1.6" stroke-dasharray="5 3"/>
+        <text x="838" y="1355" text-anchor="end" font-size="9.5" fill="var(--muted)">NC·K6</text>
+        <line x1="850" y1="1285" x2="810" y2="1250" stroke="var(--ink)" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <line x1="810" y1="1250" x2="810" y2="1155" stroke="var(--ink)" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <text x="798" y="1210" text-anchor="end" font-size="9.5" fill="var(--muted)">NO·K6</text>
+        <text x="850" y="1275" text-anchor="middle" font-weight="700">K6</text>
+        <line x1="964" y1="1285" x2="1010" y2="1285" stroke="var(--ink)" stroke-width="1.6"/>
+        <circle cx="1010" cy="1285" r="2.4" fill="var(--ink)"/>
+        <line x1="1010" y1="1285" x2="1010" y2="1420" stroke="var(--ink)" stroke-width="1.6" stroke-dasharray="5 3"/>
+        <text x="1022" y="1355" font-size="9.5" fill="var(--muted)">NC·K7</text>
+        <line x1="1010" y1="1285" x2="1050" y2="1250" stroke="var(--ink)" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <line x1="1050" y1="1250" x2="1050" y2="1155" stroke="var(--ink)" stroke-width="1.4" stroke-dasharray="3 3"/>
+        <text x="1062" y="1210" font-size="9.5" fill="var(--warn)">NO·K7 ⚠</text>
+        <text x="1010" y="1275" text-anchor="middle" font-weight="700">K7</text>
+      </g>
+
+      <line x1="1130" y1="1120" x2="1130" y2="1450" stroke="var(--border)"/>
+
+      <!-- Block4: humidifier + pump -->
+      <g font-family="var(--font-mono)" font-size="10.5">
+        <line x1="1230" y1="1155" x2="1230" y2="1210" stroke="var(--ink)" stroke-width="1.6"/>
+        <circle cx="1230" cy="1210" r="2.4" fill="var(--ink)"/><circle cx="1230" cy="1240" r="2.4" fill="var(--ink)"/>
+        <line x1="1230" y1="1212" x2="1242" y2="1226" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="1242" y="1222" fill="var(--ink)" font-weight="700">K8</text>
+        <line x1="1230" y1="1240" x2="1230" y2="1280" stroke="var(--ink)" stroke-width="1.6"/>
+        <rect x="1180" y="1280" width="100" height="42" rx="4" fill="var(--surface)" stroke="var(--ink)" stroke-width="1.4"/>
+        <text x="1230" y="1305" text-anchor="middle" font-size="10.5">Увлажнитель</text>
+        <line x1="1230" y1="1322" x2="1230" y2="1420" stroke="var(--ink)" stroke-width="1.6"/>
+
+        <line x1="1420" y1="1155" x2="1420" y2="1210" stroke="var(--ink)" stroke-width="1.6"/>
+        <circle cx="1420" cy="1210" r="2.4" fill="var(--ink)"/><circle cx="1420" cy="1240" r="2.4" fill="var(--ink)"/>
+        <line x1="1420" y1="1212" x2="1432" y2="1226" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="1432" y="1222" fill="var(--ink)" font-weight="700">K9</text>
+        <line x1="1420" y1="1240" x2="1420" y2="1280" stroke="var(--ink)" stroke-width="1.6"/>
+        <circle cx="1420" cy="1310" r="30" fill="none" stroke="var(--ink)" stroke-width="1.8"/>
+        <text x="1420" y="1316" text-anchor="middle" font-size="13" font-weight="700">M</text>
+        <line x1="1420" y1="1340" x2="1420" y2="1420" stroke="var(--ink)" stroke-width="1.6"/>
+        <text x="1420" y="1358" text-anchor="middle" font-size="10.5" fill="var(--muted)">Насос скважины</text>
+      </g>
+
+      <text x="62" y="1462" font-size="11" fill="var(--muted)">NC/NO — контакт реле в обесточенном/включённом состоянии. Реверс: K4/K5 (или K6/K7) переключают выводы мотора между GND и +V независимо — направление хода зависит от того, какая пара включена. Одновременное включение обоих реле пары не создаёт КЗ (оба вывода на одном потенциале), но штатно удерживаться не должно.</text>
+
+      <!-- ===================== SECTION G: BUTTONS ===================== -->
+      <rect x="40" y="1500" width="1820" height="200" rx="12" fill="var(--surface-2)" stroke="var(--border)"/>
+      <text x="62" y="1526" font-family="var(--font-mono)" font-size="13" font-weight="700" fill="var(--ink)">G · КНОПКИ (INPUT_PULLUP, активны по LOW)</text>
+      <line x1="200" y1="1660" x2="1700" y2="1660" stroke="var(--w-gnd)" stroke-width="2" stroke-dasharray="5 3"/>
+      <circle cx="1700" cy="1660" r="4.5" fill="var(--w-gnd)"/><text x="1710" y="1664" font-family="var(--font-mono)" font-size="10.5" fill="var(--w-gnd)">GND</text>
+
+      <g font-family="var(--font-mono)" font-size="10.5">
+        <circle cx="300" cy="1570" r="4.5" fill="var(--w-button)"/><text x="300" y="1560" text-anchor="middle" fill="var(--w-button)" font-weight="700">GPIO18</text>
+        <line x1="300" y1="1574" x2="300" y2="1600" stroke="var(--w-button)" stroke-width="2"/>
+        <circle cx="292" cy="1608" r="2.4" fill="var(--ink)"/><circle cx="308" cy="1608" r="2.4" fill="var(--ink)"/>
+        <line x1="294" y1="1607" x2="306" y2="1596" stroke="var(--ink)" stroke-width="1.6"/>
+        <line x1="300" y1="1608" x2="300" y2="1660" stroke="var(--w-button)" stroke-width="2"/>
+        <text x="300" y="1630" text-anchor="middle" font-size="11" fill="var(--ink)" font-weight="600">Полив 1</text>
+
+        <circle cx="650" cy="1570" r="4.5" fill="var(--w-button)"/><text x="650" y="1560" text-anchor="middle" fill="var(--w-button)" font-weight="700">GPIO17</text>
+        <line x1="650" y1="1574" x2="650" y2="1600" stroke="var(--w-button)" stroke-width="2"/>
+        <circle cx="642" cy="1608" r="2.4" fill="var(--ink)"/><circle cx="658" cy="1608" r="2.4" fill="var(--ink)"/>
+        <line x1="644" y1="1607" x2="656" y2="1596" stroke="var(--ink)" stroke-width="1.6"/>
+        <line x1="650" y1="1608" x2="650" y2="1660" stroke="var(--w-button)" stroke-width="2"/>
+        <text x="650" y="1630" text-anchor="middle" font-size="11" fill="var(--ink)" font-weight="600">Полив 2</text>
+
+        <circle cx="1000" cy="1570" r="4.5" fill="var(--w-button)"/><text x="1000" y="1560" text-anchor="middle" fill="var(--w-button)" font-weight="700">GPIO16</text>
+        <line x1="1000" y1="1574" x2="1000" y2="1600" stroke="var(--w-button)" stroke-width="2"/>
+        <circle cx="992" cy="1608" r="2.4" fill="var(--ink)"/><circle cx="1008" cy="1608" r="2.4" fill="var(--ink)"/>
+        <line x1="994" y1="1607" x2="1006" y2="1596" stroke="var(--ink)" stroke-width="1.6"/>
+        <line x1="1000" y1="1608" x2="1000" y2="1660" stroke="var(--w-button)" stroke-width="2"/>
+        <text x="1000" y="1630" text-anchor="middle" font-size="11" fill="var(--ink)" font-weight="600">Полив 3</text>
+
+        <circle cx="1350" cy="1570" r="4.5" fill="var(--w-button)"/><text x="1350" y="1560" text-anchor="middle" fill="var(--w-button)" font-weight="700">GPIO23</text>
+        <line x1="1350" y1="1574" x2="1350" y2="1600" stroke="var(--w-button)" stroke-width="2"/>
+        <circle cx="1342" cy="1608" r="2.4" fill="var(--ink)"/><circle cx="1358" cy="1608" r="2.4" fill="var(--ink)"/>
+        <line x1="1344" y1="1607" x2="1356" y2="1596" stroke="var(--ink)" stroke-width="1.6"/>
+        <line x1="1350" y1="1608" x2="1350" y2="1660" stroke="var(--w-button)" stroke-width="2"/>
+        <text x="1350" y="1630" text-anchor="middle" font-size="11" fill="var(--ink)" font-weight="600">Открыть форточки</text>
+        <text x="1350" y="1644" text-anchor="middle" font-size="9.5" fill="var(--muted)">удержание</text>
+
+        <circle cx="1600" cy="1570" r="4.5" fill="var(--w-button)"/><text x="1600" y="1560" text-anchor="middle" fill="var(--w-button)" font-weight="700">GPIO19</text>
+        <line x1="1600" y1="1574" x2="1600" y2="1600" stroke="var(--w-button)" stroke-width="2"/>
+        <circle cx="1592" cy="1608" r="2.4" fill="var(--ink)"/><circle cx="1608" cy="1608" r="2.4" fill="var(--ink)"/>
+        <line x1="1594" y1="1607" x2="1606" y2="1596" stroke="var(--ink)" stroke-width="1.6"/>
+        <line x1="1600" y1="1608" x2="1600" y2="1660" stroke="var(--w-button)" stroke-width="2"/>
+        <text x="1600" y="1630" text-anchor="middle" font-size="11" fill="var(--ink)" font-weight="600">Закрыть форточки</text>
+        <text x="1600" y="1644" text-anchor="middle" font-size="9.5" fill="var(--muted)">удержание</text>
+      </g>
+
+    </svg>
+    <figcaption>Принципиальная схема: A — питание с предохранителями/защитными диодами/конденсаторами (два независимых рельса — логика и силовая JD-VCC); B — ESP32 с внутренним стабилизатором 3.3V; C — типовой опто-релейный канал (повторяется 9×, см. D); D — карта катушек K1–K9; «Силовая часть» — контакты реле и нагрузки, включая реверсивные приводы форточек; E/F — датчики; G — кнопки. Связи между блоками показаны одноимёнными точками цепи (●+подпись), а не сквозными проводами — стандартная практика для многоблочных схем.</figcaption>
+  </div>
+
+  <div class="notes">
+    <h2>Примечания</h2>
+    <ol>
+      <li><b>Опто-релейный каскад (блок C)</b> — типовая схема для готовых модулей «HIGH-level trigger relay module»: входной резистор ~220Ω, оптопара (часто PC817), транзисторный ключ, катушка с защитным диодом. Точная схема зависит от вашего модуля — если на нём есть перемычка JD-VCC, снимите её и запитайте катушки отдельно (см. §5 прошлой схемы).</li>
+      <li><b>Реверс приводов форточек (K4/K5 и K6/K7)</b> — показан как наиболее распространённая топология для 2 управляющих реле на привод: каждое реле переключает «свой» вывод мотора между GND и +V. Уточните по факту купленного модуля/актуатора — если у вас готовый «2-relay H-bridge module», разводка внутри может отличаться в деталях, но логика (одно реле = одно направление) обычно та же.</li>
+      <li><b>GPIO15 требует внешний pull-down 10кΩ на GND</b> — иначе на старте платы возможно ложное включение K7 («Форточка НИЗ — закрыть»).</li>
+      <li><b>GPIO0/GPIO2 — strapping-пины</b> ESP32, влияют на режим загрузки; в проекте заняты под TRIG ультразвукового датчика и встроенный LED соответственно — держите их свободными от внешней логики в момент включения питания.</li>
+      <li><b>Делитель R5/R6 (1кΩ/2кΩ)</b> на ECHO обязателен: AJ-SR04M отдаёт 5V, вход GPIO34 держит максимум 3.3V.</li>
+      <li><b>F1/F2, D1/D2, C1/C2</b> — типовая защита БП (предохранитель, диод от переполюсовки, сглаживающий конденсатор). Номиналы ориентировочные — подберите по реальному потреблению (насос + увлажнитель + привод форточки одновременно) и характеристикам вашего блока питания.</li>
+      <li><b>U1 AMS1117-3.3</b> — стандартный стабилизатор большинства плат DOIT ESP32 DEVKIT V1, уже распаян на плате; показан для полноты картины, отдельно монтировать не нужно.</li>
+    </ol>
+  </div>
+
+  <footer>По данным <a href="https://github.com/humaxoid/SmartGreenhouse/blob/main/include/config.h">include/config.h</a> и README проекта Smart Greenhouse. Обозначения — IEC 60617. Элементы без явного подтверждения в коде отмечены как типовые/рекомендуемые.</footer>
+</main>
