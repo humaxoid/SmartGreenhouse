@@ -1,0 +1,937 @@
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║  vent_controller.cpp — Управление форточками v6.0               ║
+// ║                                                                  ║
+// ║  Архитектура:                                                    ║
+// ║   • Внутреннее состояние: топ/боттом позиция (0..100%),         ║
+// ║     направление каждого мотора, время начала движения.           ║
+// ║   • Ручной режим:                                                ║
+// ║       VMC_OPEN  → крутит верх до 100%, потом эстафета на низ;   ║
+// ║                   при отпускании — мгновенный стоп активного.   ║
+// ║       VMC_CLOSE → зеркально (низ → верх).                       ║
+// ║   • Авто режим:                                                  ║
+// ║       КАА с 7 состояниями (см. vent_controller.h).               ║
+// ║       Ступени по 20%, паузы STEP_DELAY_MIN.                     ║
+// ║   • Дождь: абсолютный приоритет, прерывает любую логику.        ║
+// ║   • NVS: сохраняем только 0% и 100% (полные положения).         ║
+// ║                                                                  ║
+// ║  ВАЖНО: вызывается из задачи Core1, никаких блокирующих delay.  ║
+// ╚══════════════════════════════════════════════════════════════════╝
+#include "vent_controller.h"
+#include "relay_manager.h"
+#include "settings.h"
+#include "config.h"
+#include <math.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/queue.h>
+#include <atomic>
+
+// ─── Внутренние типы ─────────────────────────────────────────────
+// Какая форточка задействована
+enum VentSide : uint8_t { VS_TOP = 0, VS_BOTTOM = 1 };
+
+// Направление одного мотора
+enum MotorDir : int8_t { MD_CLOSE = -1, MD_STOP = 0, MD_OPEN = +1 };
+
+// ─── Состояние одной форточки ────────────────────────────────────
+struct VentLeaf {
+    float    pct;             // Текущая позиция 0.0..100.0
+    MotorDir dir;             // Направление мотора
+    uint64_t moveStartMs;     // Когда начал движение (steadyMs)
+    float    pctAtMoveStart;  // Позиция в момент старта движения
+    uint32_t calibMs;         // Время полного хода 0→100, мс (v6.1: uint16 → uint32)
+    bool     valid;           // Позиция достоверна (был хотя бы один upper/lower bound)
+};
+
+// ─── Глобальное состояние модуля ─────────────────────────────────
+static VentLeaf s_top    = {0.0f, MD_STOP, 0, 0.0f, TOP_CALIB_SEC * 1000U, false};
+static VentLeaf s_bottom = {0.0f, MD_STOP, 0, 0.0f, BOTTOM_CALIB_SEC * 1000U, false};
+
+// Текущая команда ручного режима
+static VentManualCmd s_manualCmd       = VMC_NONE;
+static uint64_t      s_manualCmdSetMs  = 0;     // Когда нажали кнопку
+// v6.2: эстафета между моторами теперь по дедлайну, а не через
+// vTaskDelay. Заголовок файла обещает «никаких блокирующих delay»,
+// но их было четыре штуки по 200 мс прямо в processManual — на это
+// время taskCore1 переставал опрашивать датчики, кнопки и насос.
+static uint64_t      s_handoffUntilMs  = 0;     // До этого времени пауза между моторами
+
+// v6.3: аренда команды из веб-панели. s_leaseTouchMs обновляется из
+// чужой задачи (keepalive от веб-сокета), поэтому атомарный и 32-битный —
+// возраст считается беззнаковой разностью и переживает переполнение.
+static bool                  s_manualLeased = false;
+static std::atomic<uint32_t> s_leaseTouchMs{0};
+
+// Автомат авто-режима
+static VentAutoState s_autoState   = VAS_IDLE;
+static uint64_t      s_autoStateMs = 0;       // Когда вошли в текущее состояние
+static float         s_tempBeforePause = NAN; // Температура до паузы (для решения о ступени)
+static VentSide      s_autoActiveSide = VS_TOP; // Какая форточка двигается в текущей ступени
+static int8_t        s_autoStepDir    = +1;     // +1 открываем, -1 закрываем
+
+// Защита от спама в Serial (логируем смену состояния)
+static VentAutoState s_lastLoggedState = (VentAutoState)0xFF;
+
+// Дождь
+static bool s_rainActive = false;
+
+// ─── Калибровочный прогон (v6.1) ─────────────────────────────────
+// Активен для одной створки за раз. Пока идёт, обычная логика режима
+// для этой створки не работает: мотор держится на закрытие до истечения
+// deadline, затем позиция обнуляется.
+static bool     s_homingActive = false;
+static VentSide s_homingSide   = VS_TOP;
+static uint64_t s_homingEndMs  = 0;
+
+// ─── Очередь команд (v6.2) ───────────────────────────────────────
+// Раньше внешние точки входа — manualSetCmd(), onModeChanged(),
+// startHoming(), cancelHoming() — выполнялись прямо в вызывающей задаче.
+// А вызывают их три разные: AsyncTCP (веб-сокет), loopTask (MQTT) и
+// taskCore1 (кнопки). onModeChanged() при этом дёргает stopAllMotors(),
+// то есть писал в GPIO параллельно с управляющим циклом, работающим с
+// теми же s_top/s_bottom без какой-либо синхронизации. На H-мосте такое
+// чередование способно включить OPEN и CLOSE одновременно.
+//
+// Теперь внешние вызовы только КЛАДУТ команду в очередь, а исполняет её
+// drainCommands() в начале update(), то есть строго в taskCore1.
+// Правило простое: реле двигает одна задача, остальные просят.
+enum VentCmdType : uint8_t {
+    VC_MANUAL = 0,      // arg = VentManualCmd
+    VC_MODE_CHANGED,    // arg = 1 (авто) / 0 (ручной)
+    VC_HOMING_START,    // arg = сторона: 0 верх, 1 низ
+    VC_HOMING_CANCEL,
+    VC_SET_CALIB,       // arg = сторона, val = секунды
+    VC_FORCE_STOP       // реле уже обесточены снаружи (OTA): согласовать учёт
+};
+
+struct VentCmd {
+    uint8_t  type;
+    uint8_t  arg;
+    uint16_t val;
+};
+
+#define VENT_CMD_QUEUE_LEN 8
+static QueueHandle_t s_cmdQ = nullptr;
+
+static bool postCmd(uint8_t type, uint8_t arg, uint16_t val = 0) {
+    if (!s_cmdQ) return false;   // init() ещё не отработал
+    VentCmd c = { type, arg, val };
+    if (xQueueSend(s_cmdQ, &c, 0) != pdTRUE) {
+        Serial.println(F("[VENT] Command queue FULL — command dropped"));
+        return false;
+    }
+    return true;
+}
+
+// Реализации команд. Вызываются ТОЛЬКО из drainCommands(), то есть
+// из taskCore1. Снаружи доступны одноимённые публичные обёртки,
+// которые лишь кладут команду в очередь.
+static void applyManualCmd(VentManualCmd cmd, bool leased);
+static void applyModeChanged(bool autoMode);
+static bool applyHomingStart(uint8_t side);
+static void applyHomingCancel();
+static void applySetCalib(uint8_t side, uint16_t sec);
+static void applyForceStop(uint64_t nowMs);
+
+// ═══════════════════════════════════════════════════════════════════
+//  УТИЛИТЫ
+// ═══════════════════════════════════════════════════════════════════
+static const char* stateName(VentAutoState s) {
+    switch (s) {
+        case VAS_IDLE:              return "IDLE";
+        case VAS_OPEN_TOP_STEP:     return "OPEN_TOP_STEP";
+        case VAS_OPEN_BOTTOM_STEP:  return "OPEN_BOTTOM_STEP";
+        case VAS_CLOSE_TOP_STEP:    return "CLOSE_TOP_STEP";
+        case VAS_CLOSE_BOTTOM_STEP: return "CLOSE_BOTTOM_STEP";
+        case VAS_PAUSE_WAIT:        return "PAUSE_WAIT";
+        case VAS_RAIN_CLOSING:      return "RAIN_CLOSING";
+    }
+    return "?";
+}
+
+static const char* cmdName(VentManualCmd c) {
+    switch (c) {
+        case VMC_NONE:  return "NONE";
+        case VMC_OPEN:  return "OPEN";
+        case VMC_CLOSE: return "CLOSE";
+    }
+    return "?";
+}
+
+// v6.1: Сохраняет ЛЮБУЮ позицию форточки в NVS.
+// Вызывается ТОЛЬКО при фактической остановке мотора (setMotorDir → MD_STOP),
+// что даёт ~10-20 записей в день максимум при активном использовании.
+// Защита flash от износа: при удержании кнопки 30 сек — это 1 запись (на стопе),
+// а не 6 (как было при сохранении в updateMovingPct каждые 5 сек).
+static void persistVentPosition(VentSide side, float pct) {
+    uint8_t pctU = (uint8_t)(pct + 0.5f);
+    if (pctU > 100) pctU = 100;
+
+    MutexGuard lock(g_settingsMutex, pdMS_TO_TICKS(50));
+    if (!lock.locked()) return;
+
+    VentPersistent& pp = (side == VS_TOP)
+        ? g_settings.ventUpperPos
+        : g_settings.ventLowerPos;
+    if (pp.lastKnownPct == pctU && pp.positionValid) return;
+    pp.lastKnownPct  = pctU;
+    pp.positionValid = 1;
+    settingsSaveDeferred();
+    Serial.printf("[VENT] Saved %s position: %u%% to NVS\n",
+        side == VS_TOP ? "top" : "bottom", (unsigned)pctU);
+}
+
+// Загрузить позиции из NVS
+static void loadPositionsFromNVS() {
+    MutexGuard lock(g_settingsMutex, pdMS_TO_TICKS(100));
+    if (!lock.locked()) return;
+
+    if (g_settings.ventUpperPos.positionValid) {
+        s_top.pct   = (float)g_settings.ventUpperPos.lastKnownPct;
+        s_top.valid = true;
+    } else {
+        s_top.pct   = 0.0f;
+        s_top.valid = false;
+    }
+    if (g_settings.ventLowerPos.positionValid) {
+        s_bottom.pct   = (float)g_settings.ventLowerPos.lastKnownPct;
+        s_bottom.valid = true;
+    } else {
+        s_bottom.pct   = 0.0f;
+        s_bottom.valid = false;
+    }
+    s_top.calibMs    = g_settings.ventUpperCal.travelMs;
+    if (s_top.calibMs    == 0) s_top.calibMs    = TOP_CALIB_SEC * 1000U;
+    s_bottom.calibMs = g_settings.ventLowerCal.travelMs;
+    if (s_bottom.calibMs == 0) s_bottom.calibMs = BOTTOM_CALIB_SEC * 1000U;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  УПРАВЛЕНИЕ РЕЛЕ
+// ═══════════════════════════════════════════════════════════════════
+// Аккуратное переключение моторов с защитой H-bridge.
+// Никогда не включаем OPEN+CLOSE одновременно для одной форточки.
+static void setMotorDir(VentSide side, MotorDir newDir, uint64_t nowMs) {
+    VentLeaf& leaf = (side == VS_TOP) ? s_top : s_bottom;
+    if (leaf.dir == newDir) return;  // ничего не меняется
+
+    const uint8_t ventIdx = (side == VS_TOP) ? VENT_IDX_UPPER : VENT_IDX_LOWER;
+
+    // v6.2: реле форточек переключаются ТОЛЬКО через H-мостовое API.
+    // Здесь стоял setRelayDirect(), который дёргает GPIO напрямую: OFF
+    // противоположного и ON нужного шли подряд, и заявленная в config.h
+    // пауза HBRIDGE_BREAK_BEFORE_MAKE_MS не соблюдалась вообще. При этом
+    // сам механизм в RelayMgr::moveVent() был написан и работал вхолостую —
+    // у него не было ни одного вызывающего во всём проекте.
+    //
+    // Реверс мотора теперь идёт так: OFF → 100 мс → ON, причём паузу
+    // отсчитывает updatePending(), а не блокирующая задержка.
+    if (newDir == MD_STOP) {
+        if (!RelayMgr::stopVent(ventIdx)) {
+            // Остановка не имеет права «не получиться»: если мьютекс занят,
+            // обесточиваем напрямую. Учёт состояния отстанет — мотор важнее.
+            RelayMgr::forceOff(RelayMgr::ventOpenRelayIdx(ventIdx));
+            RelayMgr::forceOff(RelayMgr::ventCloseRelayIdx(ventIdx));
+        }
+    } else {
+        if (!RelayMgr::moveVent(ventIdx,
+                newDir == MD_OPEN ? VENT_DIR_OPENING : VENT_DIR_CLOSING)) {
+            // Мьютекс занят. Состояние НЕ меняем и выходим: иначе учёт
+            // разошёлся бы с железом — считали бы, что едем, а мотор стоит.
+            // update() зовётся каждые 50 мс, попытка повторится сама.
+            Serial.printf("[VENT] %s: moveVent deferred (bus busy)\n",
+                side == VS_TOP ? "TOP" : "BOTTOM");
+            return;
+        }
+    }
+
+    // Если был движущийся мотор — обновляем pct по фактическому ходу.
+    // moveStartMs может лежать в будущем (см. ниже про dead-time), поэтому
+    // вычитаем только когда время действительно наступило.
+    if (leaf.dir != MD_STOP && leaf.calibMs > 0) {
+        uint64_t elapsed = (nowMs > leaf.moveStartMs) ? (nowMs - leaf.moveStartMs) : 0;
+        float deltaPct = (float)elapsed * 100.0f / (float)leaf.calibMs;
+        if (leaf.dir == MD_OPEN)  leaf.pct = leaf.pctAtMoveStart + deltaPct;
+        if (leaf.dir == MD_CLOSE) leaf.pct = leaf.pctAtMoveStart - deltaPct;
+        if (leaf.pct < 0.0f)   leaf.pct = 0.0f;
+        if (leaf.pct > 100.0f) leaf.pct = 100.0f;
+        persistVentPosition(side, leaf.pct);
+    }
+
+    // Мотор мог не тронуться прямо сейчас: при смене направления RelayMgr
+    // выдерживает паузу break-before-make. Спрашиваем у него точную
+    // задержку, а не угадываем по прежнему направлению — включение
+    // откладывается и в случае «стоп, а следом пуск в тот же тик»,
+    // который по dir неотличим от обычного старта с нуля.
+    // Без поправки позиция набирала бы лишние 100 мс хода на каждом
+    // реверсе, а концевиков в схеме нет — ошибка копится.
+    const uint32_t startDelay = (newDir == MD_STOP)
+        ? 0 : RelayMgr::ventStartDelayMs(ventIdx, nowMs);
+
+    leaf.dir            = newDir;
+    leaf.moveStartMs    = nowMs + startDelay;
+    leaf.pctAtMoveStart = leaf.pct;
+
+    Serial.printf("[VENT] %s motor: %s (pct=%.1f)\n",
+        side == VS_TOP ? "TOP" : "BOTTOM",
+        newDir == MD_OPEN ? "OPEN" : (newDir == MD_CLOSE ? "CLOSE" : "STOP"),
+        leaf.pct);
+}
+
+// Принудительный стоп обоих
+static void stopAllMotors(uint64_t nowMs) {
+    setMotorDir(VS_TOP,    MD_STOP, nowMs);
+    setMotorDir(VS_BOTTOM, MD_STOP, nowMs);
+}
+
+// Обновить позицию движущегося мотора (без переключения реле)
+static void updateMovingPct(VentSide side, uint64_t nowMs) {
+    VentLeaf& leaf = (side == VS_TOP) ? s_top : s_bottom;
+    if (leaf.dir == MD_STOP || leaf.calibMs == 0) return;
+    // v6.2: во время паузы break-before-make мотор ещё стоит, а moveStartMs
+    // лежит в будущем. Без этой проверки вычитание uint64 ушло бы в минус
+    // и позиция скакнула бы к границе диапазона.
+    if (nowMs <= leaf.moveStartMs) return;
+
+    uint64_t elapsed = nowMs - leaf.moveStartMs;
+    float deltaPct = (float)elapsed * 100.0f / (float)leaf.calibMs;
+    float newPct = leaf.pctAtMoveStart + (leaf.dir == MD_OPEN ? deltaPct : -deltaPct);
+    if (newPct < 0.0f)   newPct = 0.0f;
+    if (newPct > 100.0f) newPct = 100.0f;
+    leaf.pct = newPct;
+    // v6.1: НЕ сохраняем в NVS при движении (износ flash). Сохранение только
+    // в setMotorDir() когда мотор фактически останавливается.
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  РУЧНОЙ РЕЖИМ
+// ═══════════════════════════════════════════════════════════════════
+// Логика "Вариант Б": зажал — крутит, отпустил — стоп.
+// При достижении 100% (открытие) или 0% (закрытие) активной форточки —
+// эстафета: переключаемся на парную форточку через паузу
+// MANUAL_RELAY_HANDOFF_MS.
+//
+// VMC_OPEN:
+//   1. Если top.pct < 100 → крутим top OPEN
+//   2. Если top.pct >= 100 → стоп top, пауза, потом bottom OPEN
+//      (если bottom.pct < 100)
+//
+// VMC_CLOSE:
+//   зеркально (низ→верх).
+static void processManual(uint64_t nowMs) {
+    // Защита от зависания: если кнопка "удержание" длится слишком долго
+    if (s_manualCmd != VMC_NONE) {
+        if (nowMs - s_manualCmdSetMs > MANUAL_HOLD_TIMEOUT_MS) {
+            Serial.println(F("[VENT] Manual hold TIMEOUT — auto stop"));
+            s_manualCmd = VMC_NONE;
+            stopAllMotors(nowMs);
+            return;
+        }
+    }
+
+    // Команда из веб-панели без биения (keepalive) — клиент пропал: стоп.
+    if (s_manualCmd != VMC_NONE && s_manualLeased) {
+        const uint32_t age = (uint32_t)nowMs - s_leaseTouchMs.load();
+        if (age > VENT_HOLD_LEASE_MS) {
+            Serial.printf("[VENT] Manual hold LEASE expired (%u ms without keepalive) - stop\n",
+                (unsigned)age);
+            s_manualCmd    = VMC_NONE;
+            s_manualLeased = false;
+            stopAllMotors(nowMs);
+            s_handoffUntilMs = 0;
+            return;
+        }
+    }
+
+    if (s_manualCmd == VMC_NONE) {
+        // Кнопка отпущена — стопим всё
+        stopAllMotors(nowMs);
+        s_handoffUntilMs = 0;
+        return;
+    }
+
+    // ── Дождь блокирует открытие ────────────────────────────────
+    if (s_rainActive && s_manualCmd == VMC_OPEN) {
+        stopAllMotors(nowMs);
+        return;
+    }
+
+    // ── Обновим текущие позиции ─────────────────────────────────
+    updateMovingPct(VS_TOP,    nowMs);
+    updateMovingPct(VS_BOTTOM, nowMs);
+
+    if (s_manualCmd == VMC_OPEN) {
+        // Эстафета верх → низ
+        if (s_top.pct < 99.5f) {
+            // Крутим верх. Если работает нижний — стоп.
+            if (s_bottom.dir != MD_STOP) setMotorDir(VS_BOTTOM, MD_STOP, nowMs);
+            if (s_top.dir != MD_OPEN) {
+                if (nowMs < s_handoffUntilMs) return;   // пауза эстафеты
+                setMotorDir(VS_TOP, MD_OPEN, nowMs);
+            }
+        } else {
+            // Верх 100% — эстафета на низ
+            if (s_top.dir != MD_STOP) {
+                setMotorDir(VS_TOP, MD_STOP, nowMs);
+                s_handoffUntilMs = nowMs + MANUAL_RELAY_HANDOFF_MS;
+                return;  // на следующем тике запустим bottom
+            }
+            if (s_bottom.pct < 99.5f) {
+                if (s_bottom.dir != MD_OPEN) {
+                    if (nowMs < s_handoffUntilMs) return;   // пауза эстафеты
+                    setMotorDir(VS_BOTTOM, MD_OPEN, nowMs);
+                }
+            } else {
+                // И низ 100% — больше открывать нечего
+                if (s_bottom.dir != MD_STOP) setMotorDir(VS_BOTTOM, MD_STOP, nowMs);
+            }
+        }
+    } else if (s_manualCmd == VMC_CLOSE) {
+        // Эстафета низ → верх
+        if (s_bottom.pct > 0.5f) {
+            if (s_top.dir != MD_STOP) setMotorDir(VS_TOP, MD_STOP, nowMs);
+            if (s_bottom.dir != MD_CLOSE) {
+                if (nowMs < s_handoffUntilMs) return;   // пауза эстафеты
+                setMotorDir(VS_BOTTOM, MD_CLOSE, nowMs);
+            }
+        } else {
+            if (s_bottom.dir != MD_STOP) {
+                setMotorDir(VS_BOTTOM, MD_STOP, nowMs);
+                s_handoffUntilMs = nowMs + MANUAL_RELAY_HANDOFF_MS;
+                return;
+            }
+            if (s_top.pct > 0.5f) {
+                if (s_top.dir != MD_CLOSE) {
+                    if (nowMs < s_handoffUntilMs) return;   // пауза эстафеты
+                    setMotorDir(VS_TOP, MD_CLOSE, nowMs);
+                }
+            } else {
+                if (s_top.dir != MD_STOP) setMotorDir(VS_TOP, MD_STOP, nowMs);
+            }
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  АВТО-РЕЖИМ
+// ═══════════════════════════════════════════════════════════════════
+// Автомат с 7 состояниями (см. enum VentAutoState).
+//
+//  Открытие:  IDLE → (T > T_OPEN) → OPEN_TOP_STEP → PAUSE_WAIT →
+//             (если T выросла: следующая ступень верха или эстафета на низ;
+//              иначе: IDLE)
+//
+//  Закрытие:  IDLE → (T < T_CLOSE) → CLOSE_BOTTOM_STEP → PAUSE_WAIT →
+//             (то же самое в обратном порядке)
+//
+//  Дождь:     любое состояние → RAIN_CLOSING (моментально 0%, 0%) → IDLE
+static void setAutoState(VentAutoState newSt, uint64_t nowMs) {
+    if (s_autoState == newSt) return;
+    s_autoState   = newSt;
+    s_autoStateMs = nowMs;
+    if (s_lastLoggedState != newSt) {
+        Serial.printf("[VENT-AUTO] state -> %s (top=%u%% bot=%u%%)\n",
+            stateName(newSt),
+            (unsigned)(s_top.pct + 0.5f),
+            (unsigned)(s_bottom.pct + 0.5f));
+        s_lastLoggedState = newSt;
+    }
+}
+
+// Запустить движение мотора на одну ступень (20%).
+// Длительность: calibMs * 0.2.
+static void startStep(VentSide side, int8_t dir, uint64_t nowMs) {
+    setMotorDir(side, dir > 0 ? MD_OPEN : MD_CLOSE, nowMs);
+    s_autoActiveSide = side;
+    s_autoStepDir    = dir;
+}
+
+// Проверить — закончилась ли ступень (мотор отработал нужное время)
+static bool stepCompleted(uint64_t nowMs) {
+    VentLeaf& leaf = (s_autoActiveSide == VS_TOP) ? s_top : s_bottom;
+    if (leaf.dir == MD_STOP) return true;
+    if (nowMs <= leaf.moveStartMs) return false;   // ещё идёт пауза H-моста
+    uint64_t elapsed = nowMs - leaf.moveStartMs;
+    uint32_t needMs  = (uint32_t)leaf.calibMs * VENT_AUTO_STEP_PCT / 100U;
+    return elapsed >= needMs;
+}
+
+static void processAuto(uint64_t nowMs, float temp) {
+    // Получаем актуальные пороги из настроек
+    float openHigh = 29.0f, closeLow = 24.0f;
+    {
+        MutexGuard lock(g_settingsMutex, pdMS_TO_TICKS(20));
+        if (lock.locked()) {
+            // Берём пороги верхней форточки (теперь они общие для пары)
+            openHigh = g_settings.ventUpper.high;
+            closeLow = g_settings.ventUpper.low;
+        }
+    }
+
+    // ── ДОЖДЬ — абсолютный приоритет ──────────────────────────────
+    if (s_rainActive) {
+        // Если форточки уже закрыты — IDLE, иначе — закрываем
+        if (s_top.pct < 0.5f && s_bottom.pct < 0.5f) {
+            stopAllMotors(nowMs);
+            setAutoState(VAS_IDLE, nowMs);
+        } else {
+            setAutoState(VAS_RAIN_CLOSING, nowMs);
+            // Закрываем сначала нижнюю, потом верхнюю
+            if (s_bottom.pct > 0.5f) {
+                setMotorDir(VS_TOP, MD_STOP, nowMs);
+                setMotorDir(VS_BOTTOM, MD_CLOSE, nowMs);
+            } else if (s_top.pct > 0.5f) {
+                setMotorDir(VS_BOTTOM, MD_STOP, nowMs);
+                setMotorDir(VS_TOP, MD_CLOSE, nowMs);
+            }
+            updateMovingPct(VS_TOP,    nowMs);
+            updateMovingPct(VS_BOTTOM, nowMs);
+        }
+        return;
+    }
+
+    // Обновляем позиции движущихся моторов
+    updateMovingPct(VS_TOP,    nowMs);
+    updateMovingPct(VS_BOTTOM, nowMs);
+
+    bool tempValid = !isnan(temp);
+
+    // ── ПРИОРИТЕТ ЗАКРЫТИЯ: если T упала ниже порога — прервать всё ──
+    if (tempValid && temp < closeLow
+            && (s_top.pct > 0.5f || s_bottom.pct > 0.5f)
+            && s_autoState != VAS_CLOSE_TOP_STEP
+            && s_autoState != VAS_CLOSE_BOTTOM_STEP
+            && s_autoState != VAS_PAUSE_WAIT) {
+        // Прерываем что бы то ни было
+        stopAllMotors(nowMs);
+        Serial.printf("[VENT-AUTO] T=%.1f < %.1f — interrupt, start closing\n", temp, closeLow);
+        // Идём через закрытие нижней (низ→верх)
+        if (s_bottom.pct > 0.5f) {
+            startStep(VS_BOTTOM, -1, nowMs);
+            setAutoState(VAS_CLOSE_BOTTOM_STEP, nowMs);
+        } else if (s_top.pct > 0.5f) {
+            startStep(VS_TOP, -1, nowMs);
+            setAutoState(VAS_CLOSE_TOP_STEP, nowMs);
+        }
+        return;
+    }
+
+    switch (s_autoState) {
+
+      case VAS_IDLE: {
+            stopAllMotors(nowMs);
+            if (!tempValid) return;
+            // Решаем — нужно открывать или закрывать
+            if (temp > openHigh && (s_top.pct < 99.5f || s_bottom.pct < 99.5f)) {
+                Serial.printf("[VENT-AUTO] T=%.1f > %.1f — start opening\n", temp, openHigh);
+                s_tempBeforePause = temp;
+                if (s_top.pct < 99.5f) {
+                    startStep(VS_TOP, +1, nowMs);
+                    setAutoState(VAS_OPEN_TOP_STEP, nowMs);
+                } else {
+                    startStep(VS_BOTTOM, +1, nowMs);
+                    setAutoState(VAS_OPEN_BOTTOM_STEP, nowMs);
+                }
+            } else if (temp < closeLow && (s_top.pct > 0.5f || s_bottom.pct > 0.5f)) {
+                Serial.printf("[VENT-AUTO] T=%.1f < %.1f — start closing\n", temp, closeLow);
+                s_tempBeforePause = temp;
+                if (s_bottom.pct > 0.5f) {
+                    startStep(VS_BOTTOM, -1, nowMs);
+                    setAutoState(VAS_CLOSE_BOTTOM_STEP, nowMs);
+                } else {
+                    startStep(VS_TOP, -1, nowMs);
+                    setAutoState(VAS_CLOSE_TOP_STEP, nowMs);
+                }
+            }
+            break;
+        }
+
+      case VAS_OPEN_TOP_STEP:
+      case VAS_OPEN_BOTTOM_STEP:
+      case VAS_CLOSE_TOP_STEP:
+      case VAS_CLOSE_BOTTOM_STEP: {
+            if (!stepCompleted(nowMs)) return;
+            // Ступень завершена — стоп, переходим в паузу
+            VentSide activeSide = s_autoActiveSide;
+            setMotorDir(activeSide, MD_STOP, nowMs);
+            s_tempBeforePause = tempValid ? temp : s_tempBeforePause;
+            setAutoState(VAS_PAUSE_WAIT, nowMs);
+            break;
+        }
+
+      case VAS_PAUSE_WAIT: {
+            // Ждём STEP_DELAY_MIN секунд
+            uint64_t needMs = (uint64_t)STEP_DELAY_MIN * 1000ULL;
+            if (nowMs - s_autoStateMs < needMs) return;
+
+            if (!tempValid) {
+                setAutoState(VAS_IDLE, nowMs);
+                return;
+            }
+
+            // Сравнение температуры — решаем что делать дальше
+            // Контекст: какое было направление (открытие/закрытие)?
+            bool wasOpening = (s_autoStepDir > 0);
+            bool tempRose   = (temp > s_tempBeforePause + STEP_TEMP_RISE);
+            bool tempFell   = (temp < s_tempBeforePause - STEP_TEMP_RISE);
+
+            if (wasOpening) {
+                // Продолжаем открывать только если T продолжает расти
+                if (tempRose && temp > openHigh) {
+                    s_tempBeforePause = temp;
+                    if (s_top.pct < 99.5f) {
+                        startStep(VS_TOP, +1, nowMs);
+                        setAutoState(VAS_OPEN_TOP_STEP, nowMs);
+                    } else if (s_bottom.pct < 99.5f) {
+                        startStep(VS_BOTTOM, +1, nowMs);
+                        setAutoState(VAS_OPEN_BOTTOM_STEP, nowMs);
+                    } else {
+                        // Обе на 100% — некуда дальше
+                        Serial.println(F("[VENT-AUTO] Both vents at 100% — IDLE"));
+                        setAutoState(VAS_IDLE, nowMs);
+                    }
+                } else {
+                    // Не выросла — останавливаемся в IDLE
+                    Serial.printf("[VENT-AUTO] T did not rise (%.1f -> %.1f) — IDLE\n",
+                                  s_tempBeforePause, temp);
+                    setAutoState(VAS_IDLE, nowMs);
+                }
+            } else {
+                // Закрытие: продолжаем только если T продолжает падать
+                if (tempFell && temp < closeLow) {
+                    s_tempBeforePause = temp;
+                    if (s_bottom.pct > 0.5f) {
+                        startStep(VS_BOTTOM, -1, nowMs);
+                        setAutoState(VAS_CLOSE_BOTTOM_STEP, nowMs);
+                    } else if (s_top.pct > 0.5f) {
+                        startStep(VS_TOP, -1, nowMs);
+                        setAutoState(VAS_CLOSE_TOP_STEP, nowMs);
+                    } else {
+                        Serial.println(F("[VENT-AUTO] Both vents at 0% — IDLE"));
+                        setAutoState(VAS_IDLE, nowMs);
+                    }
+                } else if (!tempFell) {
+                    // Не упала — прерываем закрытие
+                    Serial.printf("[VENT-AUTO] T did not fall (%.1f -> %.1f) — IDLE\n",
+                                  s_tempBeforePause, temp);
+                    setAutoState(VAS_IDLE, nowMs);
+                }
+            }
+            break;
+        }
+
+      case VAS_RAIN_CLOSING: {
+            // Этот state обрабатывается в начале функции (s_rainActive).
+            // Если попали сюда — значит дождь снят.
+            setAutoState(VAS_IDLE, nowMs);
+            break;
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  ПУБЛИЧНЫЙ API
+// ═══════════════════════════════════════════════════════════════════
+void VentCtrl::init() {
+    // v6.2: очередь создаём ПЕРВОЙ. До неё postCmd() молча отказывает,
+    // и команда, пришедшая по сети раньше инициализации, потерялась бы.
+    if (!s_cmdQ) {
+        s_cmdQ = xQueueCreate(VENT_CMD_QUEUE_LEN, sizeof(VentCmd));
+        configASSERT(s_cmdQ);
+    }
+
+    loadPositionsFromNVS();
+
+    // Инициализируем реле в STOP (на всякий случай)
+    RelayMgr::forceOff(RELAY_IDX_VENT_UPPER_OPEN);
+    RelayMgr::forceOff(RELAY_IDX_VENT_UPPER_CLOSE);
+    RelayMgr::forceOff(RELAY_IDX_VENT_LOWER_OPEN);
+    RelayMgr::forceOff(RELAY_IDX_VENT_LOWER_CLOSE);
+
+    s_top.dir         = MD_STOP;
+    s_bottom.dir      = MD_STOP;
+    s_manualCmd       = VMC_NONE;
+    s_autoState       = VAS_IDLE;
+
+    Serial.printf("[VENT] Init v6.0: top=%.1f%% (calib=%us, valid=%d) "
+                  "bottom=%.1f%% (calib=%us, valid=%d)\n",
+        s_top.pct,    (unsigned)(s_top.calibMs / 1000),    (int)s_top.valid,
+        s_bottom.pct, (unsigned)(s_bottom.calibMs / 1000), (int)s_bottom.valid);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  КАЛИБРОВОЧНЫЙ ПРОГОН
+// ═══════════════════════════════════════════════════════════════════
+static bool applyHomingStart(uint8_t side) {
+    if (side > 1) return false;
+    if (s_homingActive) return false;
+
+    VentSide s = (side == 0) ? VS_TOP : VS_BOTTOM;
+    VentLeaf& leaf = (s == VS_TOP) ? s_top : s_bottom;
+    if (leaf.calibMs == 0) return false;
+
+    // Полное время хода плюс запас — чтобы гарантированно дойти до
+    // концевика даже если расчётная позиция сильно занижена.
+    uint32_t runMs = (uint32_t)((uint64_t)leaf.calibMs
+                                * (100 + VENT_TRAVEL_OVERRUN_PCT) / 100);
+
+    uint64_t now = steadyMs();
+    s_homingActive = true;
+    s_homingSide   = s;
+    s_homingEndMs  = now + runMs;
+
+    // Ручное управление и авто-логику на время прогона отключаем,
+    // чтобы они не перехватили мотор.
+    s_manualCmd = VMC_NONE;
+    s_autoState = VAS_IDLE;
+
+    stopAllMotors(now);
+    setMotorDir(s, MD_CLOSE, now);
+
+    Serial.printf("[VENT] Homing %s: closing for %u ms (travel %u + %u%% margin)\n",
+        s == VS_TOP ? "TOP" : "BOTTOM",
+        (unsigned)runMs, (unsigned)leaf.calibMs, (unsigned)VENT_TRAVEL_OVERRUN_PCT);
+    return true;
+}
+
+bool VentCtrl::isHoming(uint8_t side) {
+    if (!s_homingActive) return false;
+    return (side == 0) ? (s_homingSide == VS_TOP) : (s_homingSide == VS_BOTTOM);
+}
+
+static void applyHomingCancel() {
+    if (!s_homingActive) return;
+    s_homingActive = false;
+    stopAllMotors(steadyMs());
+    Serial.println(F("[VENT] Homing cancelled"));
+}
+
+// Обработка активного прогона. Возвращает true, если прогон идёт и
+// обычную логику режима выполнять не нужно.
+static bool processHoming(uint64_t nowMs) {
+    if (!s_homingActive) return false;
+
+    VentLeaf& leaf = (s_homingSide == VS_TOP) ? s_top : s_bottom;
+
+    // Мотор мог быть остановлен снаружи (авария, смена режима) — тогда
+    // прогон недействителен: позицию обнулять нельзя, до упора не дошли.
+    if (leaf.dir != MD_CLOSE) {
+        s_homingActive = false;
+        Serial.println(F("[VENT] Homing aborted — motor was stopped externally"));
+        return false;
+    }
+
+    if (nowMs < s_homingEndMs) return true;   // ещё едем
+
+    // Дошли: створка упёрлась в концевик, расчётная позиция теперь заведомо ноль.
+    s_homingActive = false;
+    setMotorDir(s_homingSide, MD_STOP, nowMs);
+    leaf.pct   = 0.0f;
+    leaf.valid = true;
+    persistVentPosition(s_homingSide, 0.0f);
+
+    Serial.printf("[VENT] Homing %s DONE — position reset to 0%%\n",
+        s_homingSide == VS_TOP ? "TOP" : "BOTTOM");
+    return false;
+}
+
+// Разбор накопленных команд. Выполняется в taskCore1 перед логикой
+// режима, поэтому к моменту работы автоматики состояние уже согласовано.
+static void drainCommands() {
+    if (!s_cmdQ) return;
+    VentCmd c;
+    // Ограничиваем число команд за тик: очередь короткая, но заливать
+    // её быстрее, чем мы разбираем, всё же не должно застопорить цикл.
+    for (uint8_t guard = 0; guard < VENT_CMD_QUEUE_LEN; guard++) {
+        if (xQueueReceive(s_cmdQ, &c, 0) != pdTRUE) return;
+        switch (c.type) {
+            case VC_MANUAL:        applyManualCmd((VentManualCmd)c.arg, c.val != 0); break;
+            case VC_MODE_CHANGED:  applyModeChanged(c.arg != 0);         break;
+            case VC_HOMING_START:  applyHomingStart(c.arg);              break;
+            case VC_HOMING_CANCEL: applyHomingCancel();                  break;
+            case VC_SET_CALIB:     applySetCalib(c.arg, c.val);          break;
+            case VC_FORCE_STOP:    applyForceStop(steadyMs());           break;
+            default: break;
+        }
+    }
+}
+
+void VentCtrl::update(uint64_t nowMs, float temp, bool rain, bool autoMode) {
+    // v6.2: сначала исполняем всё, что пришло от веб-сокета, MQTT и
+    // кнопок. Только здесь, в taskCore1, состояние форточек и реле
+    // имеют право меняться.
+    drainCommands();
+
+    // Edge: смена состояния дождя
+    if (rain && !s_rainActive) {
+        Serial.println(F("[VENT] RAIN detected — emergency close"));
+    } else if (!rain && s_rainActive) {
+        Serial.println(F("[VENT] RAIN cleared — back to normal"));
+    }
+    s_rainActive = rain;
+
+    // v6.1: калибровочный прогон имеет приоритет над обоими режимами.
+    // Дождь ему не мешает: прогон и так закрывает створку.
+    if (processHoming(nowMs)) return;
+
+    if (autoMode) {
+        processAuto(nowMs, temp);
+    } else {
+        processManual(nowMs);
+    }
+}
+
+static void applyManualCmd(VentManualCmd cmd, bool leased) {
+    // v6.1: любое ручное вмешательство отменяет калибровочный прогон —
+    // иначе кнопка не отреагирует, а пользователь решит, что панель зависла.
+    if (s_homingActive && cmd != VMC_NONE) applyHomingCancel();
+
+    // Аренда обновляется и повторной командой с тем же значением (раньше они
+    // отбрасывались целиком) — иначе клиент, повторяющий «держу», не продлил бы её.
+    if (cmd != VMC_NONE) {
+        s_manualLeased = leased;
+        if (leased) s_leaseTouchMs.store((uint32_t)steadyMs());
+    } else {
+        s_manualLeased = false;
+    }
+
+    if (cmd == s_manualCmd) return;  // нет изменения
+
+    s_manualCmd      = cmd;
+    s_manualCmdSetMs = steadyMs();
+    s_handoffUntilMs = 0;
+
+    Serial.printf("[VENT] Manual cmd: %s\n", cmdName(cmd));
+
+    // Если кнопку отпустили — мгновенный стоп активного мотора
+    if (cmd == VMC_NONE) {
+        stopAllMotors(steadyMs());
+    }
+}
+
+static void applySetCalib(uint8_t side, uint16_t sec) {
+    VentLeaf& leaf = (side == 0) ? s_top : s_bottom;
+    leaf.calibMs = (uint32_t)sec * 1000U;
+    {
+        MutexGuard lock(g_settingsMutex, pdMS_TO_TICKS(50));
+        if (lock.locked()) {
+            VentCalibration& cal = (side == 0)
+                ? g_settings.ventUpperCal : g_settings.ventLowerCal;
+            cal.travelMs = leaf.calibMs;
+            settingsSaveDeferred();
+        }
+    }
+    Serial.printf("[VENT] %s calibration set: %u sec\n",
+        side == 0 ? "Top" : "Bottom", (unsigned)sec);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  ПУБЛИЧНОЕ API — только постановка команд в очередь
+// ═══════════════════════════════════════════════════════════════════
+// Все функции ниже вызываются из чужих задач (AsyncTCP, loopTask,
+// taskCore1) и НЕ ДОЛЖНЫ трогать ни s_top/s_bottom, ни реле.
+// Проверки аргументов делаются сразу — панели нужен честный ответ
+// «принято / отказано», а исполнение всё равно произойдёт в taskCore1.
+
+void VentCtrl::manualSetCmd(VentManualCmd cmd, bool leased) {
+    postCmd(VC_MANUAL, (uint8_t)cmd, leased ? 1 : 0);
+}
+
+// Биение для «держу» из веб-панели: только метка времени, очередь не нужна
+// (и не может переполниться, потеряв стоп).
+void VentCtrl::manualKeepAlive() {
+    s_leaseTouchMs.store((uint32_t)steadyMs());
+}
+
+void VentCtrl::onModeChanged(bool autoMode) {
+    postCmd(VC_MODE_CHANGED, autoMode ? 1 : 0);
+}
+
+bool VentCtrl::startHoming(uint8_t side) {
+    // Быстрые проверки — чтобы вернуть ответ панели прямо сейчас.
+    // Состояние читаем без блокировки: это подсказка пользователю,
+    // а настоящее решение примет applyHomingStart в taskCore1.
+    if (side > 1) return false;
+    if (s_homingActive) return false;
+    const VentLeaf& leaf = (side == 0) ? s_top : s_bottom;
+    if (leaf.calibMs == 0) return false;
+    return postCmd(VC_HOMING_START, side);
+}
+
+void VentCtrl::cancelHoming() {
+    postCmd(VC_HOMING_CANCEL, 0);
+}
+
+bool VentCtrl::setTopCalibSec(uint16_t sec) {
+    if (sec < 1 || sec > 120) return false;
+    return postCmd(VC_SET_CALIB, 0, sec);
+}
+
+bool VentCtrl::setBottomCalibSec(uint16_t sec) {
+    if (sec < 1 || sec > 120) return false;
+    return postCmd(VC_SET_CALIB, 1, sec);
+}
+
+uint16_t VentCtrl::getTopCalibSec()    { return s_top.calibMs    / 1000U; }
+uint16_t VentCtrl::getBottomCalibSec() { return s_bottom.calibMs / 1000U; }
+
+void VentCtrl::getStatus(VentStatusSnapshot& out) {
+    out.topPct         = (uint8_t)(s_top.pct + 0.5f);
+    out.bottomPct      = (uint8_t)(s_bottom.pct + 0.5f);
+    out.topMoving      = (s_top.dir != MD_STOP);
+    out.bottomMoving   = (s_bottom.dir != MD_STOP);
+    out.topDir         = (int8_t)s_top.dir;
+    out.bottomDir      = (int8_t)s_bottom.dir;
+    out.autoState      = (uint8_t)s_autoState;
+    out.rainBlocked    = s_rainActive;
+    out.topCalibSec    = s_top.calibMs    / 1000U;
+    out.bottomCalibSec = s_bottom.calibMs / 1000U;
+    out.topHoming      = s_homingActive && s_homingSide == VS_TOP;
+    out.bottomHoming   = s_homingActive && s_homingSide == VS_BOTTOM;
+}
+
+// v6.3: реле форточек обесточены СНАРУЖИ (OtaMgr::gracefulShutdown зовёт
+// RelayMgr::forceOff), а VentCtrl считает моторы идущими: leaf.dir остаётся
+// OPEN/CLOSE. Если обновление не удалось и автоматика возобновилась, зажатая
+// кнопка видела бы leaf.dir == newDir и ничего не запускала (setMotorDir
+// выходит рано), а расчётная позиция «росла» бы за счёт времени загрузки.
+//
+// Команду исполняет update() после возобновления, поэтому время остановки
+// запоминается в момент вызова forceStopAll(): позиция интегрируется до него,
+// а не до конца загрузки. Повторные вызовы (OTA зовёт останов и перед
+// прошивкой, и перед файловой системой) сохраняют самое раннее время.
+static std::atomic<bool>     s_forceStopPending{false};
+static std::atomic<uint32_t> s_forceStopMs{0};
+
+void VentCtrl::forceStopAll() {
+    if (s_forceStopPending.exchange(true)) return;
+    s_forceStopMs.store((uint32_t)steadyMs());
+    if (!postCmd(VC_FORCE_STOP, 0)) s_forceStopPending.store(false);
+}
+
+static void applyForceStop(uint64_t nowMs) {
+    // Момент остановки восстанавливаем из 32-битной метки: возраст считается
+    // беззнаковой разностью и переживает переполнение.
+    const uint32_t age = (uint32_t)nowMs - s_forceStopMs.load();
+    const uint64_t stopMs = (age <= nowMs) ? nowMs - age : nowMs;
+    s_forceStopPending.store(false);
+
+    s_homingActive   = false;
+    s_manualCmd      = VMC_NONE;
+    s_manualLeased   = false;
+    s_autoState      = VAS_IDLE;
+    s_handoffUntilMs = 0;
+    // setMotorDir выключит реле повторно (безвредно: они уже обесточены) и
+    // зафиксирует позицию по времени до stopMs.
+    setMotorDir(VS_TOP,    MD_STOP, stopMs);
+    setMotorDir(VS_BOTTOM, MD_STOP, stopMs);
+    Serial.println(F("[VENT] Forced stop applied (relays were de-energized externally)"));
+}
+
+static void applyModeChanged(bool autoMode) {
+    Serial.printf("[VENT] Mode changed -> %s, stopping all motors\n",
+                  autoMode ? "AUTO" : "MANUAL");
+    s_homingActive = false;   // v6.1: смена режима прерывает прогон
+    stopAllMotors(steadyMs());
+    s_manualCmd = VMC_NONE;
+    s_autoState = VAS_IDLE;
+}
