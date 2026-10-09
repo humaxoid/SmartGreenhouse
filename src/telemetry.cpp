@@ -38,6 +38,7 @@ static char         s_id[17] = "";
 static bool         s_bootSent = false;  // первое сообщение после запуска ещё не ушло
 static uint64_t     s_nextMs = 0;
 static uint64_t     s_lastTry = 0;
+static uint64_t     s_retryMs = 600000ULL;   // растёт при подряд неудачах
 static std::atomic<uint32_t> s_lastOkTs{0};
 static std::atomic<int16_t>  s_lastCode{0};
 static std::atomic<uint32_t> s_sent{0};
@@ -194,8 +195,11 @@ void Telemetry::loop(uint64_t nowMs) {
 
     if (sendOnce()) {
         s_bootSent = true;
+        s_retryMs = TLM_RETRY_MS;
         s_nextMs = nowMs + TLM_PERIOD_MS;
     } else {
-        s_nextMs = nowMs + TLM_RETRY_MS;
+        // Приёмник недоступен: 10 → 20 → 40 → 60 мин, дальше раз в час.
+        s_nextMs = nowMs + s_retryMs;
+        s_retryMs = s_retryMs * 2 > TLM_PERIOD_MS ? TLM_PERIOD_MS : s_retryMs * 2;
     }
 }

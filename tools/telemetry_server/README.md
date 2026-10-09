@@ -35,7 +35,7 @@ GH_TRUST_PROXY=1
 sudo cp gh-telemetry.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable --now gh-telemetry
 # nginx: подставить свой домен, затем
-sudo certbot --nginx -d stat.example.com
+sudo certbot --nginx -d pf.kzpm.org
 ```
 
 ## Страны
@@ -49,7 +49,7 @@ sudo certbot --nginx -d stat.example.com
 В сборку вписывается адрес приёмника (только `https://`):
 
 ```ini
-build_flags = ... -D TELEMETRY_URL=\"https://stat.example.com/api/v1/hb\"
+build_flags = ... -D TELEMETRY_URL=\"https://pf.kzpm.org/api/v1/hb\"
 ```
 
 Пока адрес пуст, функции в сборке нет. Пользователь включает отправку сам:

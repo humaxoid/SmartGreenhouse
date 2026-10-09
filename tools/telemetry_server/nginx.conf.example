@@ -3,13 +3,13 @@ limit_req_zone $binary_remote_addr zone=gh_hb:1m rate=30r/m;
 
 server {
     listen 80;
-    server_name stat.example.com;
+    server_name pf.kzpm.org;
     location / { return 301 https://$host$request_uri; }
 }
 
 server {
     listen 443 ssl http2;
-    server_name stat.example.com;
+    server_name pf.kzpm.org;
     # ssl_certificate / ssl_certificate_key добавит certbot
 
     client_max_body_size 4k;

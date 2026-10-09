@@ -649,10 +649,10 @@ buttons use, with the upper → lower handoff.
 ## 10.1 📊 Anonymous statistics
 
 An optional feature for the developer: **off by default**, switched on with the
-toggle in "Settings → System → Anonymous statistics", and only available in a
-build with a receiver address (`TELEMETRY_URL` in `config.h` or
-`-D TELEMETRY_URL=\"https://...\"` at build time). A normal build has no
-address — nothing is sent and the toggle is disabled.
+toggle in "Settings → System → Anonymous statistics". The receiver address is
+set in `config.h` (`TELEMETRY_URL`, currently `https://pf.kzpm.org/api/v1/hb`)
+or at build time (`-D TELEMETRY_URL=\"https://...\"`). Building with an empty
+address removes the feature: nothing is sent and the toggle is disabled.
 
 Once an hour (and once after boot) the controller sends one HTTPS message with
 certificate verification:
