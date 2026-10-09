@@ -235,16 +235,25 @@ void RelayMgr::forceOff(uint8_t idx) {
     }
 
     MutexGuard lock(g_settingsMutex, pdMS_TO_TICKS(20));
-    if (!lock.locked()) {
-        // Учёт не обновился — но реле уже обесточено, а состояние
-        // поправится при следующем штатном переключении.
-        Serial.printf("[RELAY] FORCE OFF %s (state not recorded: mutex busy)\n",
-            RELAY_NAMES[idx]);
-        return;
+    if (lock.locked()) {
+        // Повторно, уже под мьютексом: другая задача могла успеть пройти
+        // doGpio(ON) или updatePending() между первым LOW и захватом —
+        // тогда реле снова под током, а учёт ниже записал бы «выключено».
+        digitalWrite(RELAY_PINS[idx], LOW);
+        for (uint8_t v = 0; v < NUM_VENTS; v++) {
+            if (s_pending[v].active && s_pending[v].relayIdx == idx) {
+                s_pending[v] = {false, 0, 0};
+            }
+        }
     }
+
+    // Учёт пишем и при занятом мьютексе (один байт). Раньше он оставался
+    // «включено», и следующий doGpio(ON) считал реле уже включённым и не
+    // трогал GPIO: створка «ехала» только в расчёте, насос не запускался.
     if (g_settings.relayState[idx]) {
         g_settings.relayState[idx] = false;
-        Serial.printf("[RELAY] FORCE OFF %s\n", RELAY_NAMES[idx]);
+        Serial.printf("[RELAY] FORCE OFF %s%s\n", RELAY_NAMES[idx],
+            lock.locked() ? "" : " (mutex busy)");
         if (!isVentRelay(idx)) settingsSaveDeferred();
         MqttMgr::publishRelayState(idx);
     }
@@ -273,6 +282,9 @@ const char* RelayMgr::getName(uint8_t idx) {
 
 bool RelayMgr::moveVent(uint8_t ventIdx, VentDirection dir) {
     if (ventIdx >= NUM_VENTS) return false;
+    // Ниже STOPPED не выключал бы ничего (обе цели 0xFF), а вызывающий
+    // получил бы «принято» при моторе под током.
+    if (dir == VENT_DIR_STOPPED) return stopVent(ventIdx);
 
     const uint8_t openIdx  = ventOpenRelayIdx(ventIdx);
     const uint8_t closeIdx = ventCloseRelayIdx(ventIdx);
@@ -302,9 +314,7 @@ bool RelayMgr::moveVent(uint8_t ventIdx, VentDirection dir) {
             targetOff = openIdx;
             break;
         case VENT_DIR_STOPPED:
-            // Оба выключены — обрабатывается stopVent()
-            // Здесь тоже работает, но stopVent() проще и быстрее.
-            break;
+            break;   // не доходит: отдан stopVent() в начале функции
     }
 
     // ── Шаг 1: выключить противоположное реле, если оно активно ──

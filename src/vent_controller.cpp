@@ -125,11 +125,11 @@ static bool postCmd(uint8_t type, uint8_t arg, uint16_t val = 0) {
 // Реализации команд. Вызываются ТОЛЬКО из drainCommands(), то есть
 // из taskCore1. Снаружи доступны одноимённые публичные обёртки,
 // которые лишь кладут команду в очередь.
-static void applyManualCmd(VentManualCmd cmd, bool leased);
+static void applyManualCmd(VentManualCmd cmd, bool leased, uint64_t nowMs);
 static void applyModeChanged(bool autoMode);
 static bool applyHomingStart(uint8_t side);
 static void applyHomingCancel();
-static void applySetCalib(uint8_t side, uint16_t sec);
+static void applySetCalib(uint8_t side, uint16_t sec, uint64_t nowMs);
 static void applyForceStop(uint64_t nowMs);
 
 // ═══════════════════════════════════════════════════════════════════
@@ -329,11 +329,14 @@ static void processManual(uint64_t nowMs) {
     }
 
     // Команда из веб-панели без биения (keepalive) — клиент пропал: стоп.
+    // Возраст со знаком: keepalive из задачи AsyncTCP мог прийти уже после
+    // того, как взят nowMs этого тика, и тогда метка «из будущего» — это
+    // свежее биение, а не переполнение до четырёх миллиардов.
     if (s_manualCmd != VMC_NONE && s_manualLeased) {
-        const uint32_t age = (uint32_t)nowMs - s_leaseTouchMs.load();
-        if (age > VENT_HOLD_LEASE_MS) {
-            Serial.printf("[VENT] Manual hold LEASE expired (%u ms without keepalive) - stop\n",
-                (unsigned)age);
+        const int32_t age = (int32_t)((uint32_t)nowMs - s_leaseTouchMs.load());
+        if (age > (int32_t)VENT_HOLD_LEASE_MS) {
+            Serial.printf("[VENT] Manual hold LEASE expired (%ld ms without keepalive) - stop\n",
+                (long)age);
             s_manualCmd    = VMC_NONE;
             s_manualLeased = false;
             stopAllMotors(nowMs);
@@ -736,7 +739,7 @@ static bool processHoming(uint64_t nowMs) {
 
 // Разбор накопленных команд. Выполняется в taskCore1 перед логикой
 // режима, поэтому к моменту работы автоматики состояние уже согласовано.
-static void drainCommands() {
+static void drainCommands(uint64_t nowMs) {
     if (!s_cmdQ) return;
     VentCmd c;
     // Ограничиваем число команд за тик: очередь короткая, но заливать
@@ -744,11 +747,11 @@ static void drainCommands() {
     for (uint8_t guard = 0; guard < VENT_CMD_QUEUE_LEN; guard++) {
         if (xQueueReceive(s_cmdQ, &c, 0) != pdTRUE) return;
         switch (c.type) {
-            case VC_MANUAL:        applyManualCmd((VentManualCmd)c.arg, c.val != 0); break;
+            case VC_MANUAL:        applyManualCmd((VentManualCmd)c.arg, c.val != 0, nowMs); break;
             case VC_MODE_CHANGED:  applyModeChanged(c.arg != 0);         break;
             case VC_HOMING_START:  applyHomingStart(c.arg);              break;
             case VC_HOMING_CANCEL: applyHomingCancel();                  break;
-            case VC_SET_CALIB:     applySetCalib(c.arg, c.val);          break;
+            case VC_SET_CALIB:     applySetCalib(c.arg, c.val, nowMs);   break;
             case VC_FORCE_STOP:    applyForceStop(steadyMs());           break;
             default: break;
         }
@@ -759,7 +762,7 @@ void VentCtrl::update(uint64_t nowMs, float temp, bool rain, bool autoMode) {
     // v6.2: сначала исполняем всё, что пришло от веб-сокета, MQTT и
     // кнопок. Только здесь, в taskCore1, состояние форточек и реле
     // имеют право меняться.
-    drainCommands();
+    drainCommands(nowMs);
 
     // Edge: смена состояния дождя
     if (rain && !s_rainActive) {
@@ -780,7 +783,11 @@ void VentCtrl::update(uint64_t nowMs, float temp, bool rain, bool autoMode) {
     }
 }
 
-static void applyManualCmd(VentManualCmd cmd, bool leased) {
+// Метки времени ставятся по nowMs тика, а не по steadyMs(): processManual
+// в этом же тике вычитает их из nowMs, взятого ДО опроса датчиков. Метка
+// «из будущего» уводила разность uint64 в минус, и команда сразу же
+// гасилась ложным «Manual hold TIMEOUT».
+static void applyManualCmd(VentManualCmd cmd, bool leased, uint64_t nowMs) {
     // v6.1: любое ручное вмешательство отменяет калибровочный прогон —
     // иначе кнопка не отреагирует, а пользователь решит, что панель зависла.
     if (s_homingActive && cmd != VMC_NONE) applyHomingCancel();
@@ -789,7 +796,7 @@ static void applyManualCmd(VentManualCmd cmd, bool leased) {
     // отбрасывались целиком) — иначе клиент, повторяющий «держу», не продлил бы её.
     if (cmd != VMC_NONE) {
         s_manualLeased = leased;
-        if (leased) s_leaseTouchMs.store((uint32_t)steadyMs());
+        if (leased) s_leaseTouchMs.store((uint32_t)nowMs);
     } else {
         s_manualLeased = false;
     }
@@ -797,19 +804,27 @@ static void applyManualCmd(VentManualCmd cmd, bool leased) {
     if (cmd == s_manualCmd) return;  // нет изменения
 
     s_manualCmd      = cmd;
-    s_manualCmdSetMs = steadyMs();
+    s_manualCmdSetMs = nowMs;
     s_handoffUntilMs = 0;
 
     Serial.printf("[VENT] Manual cmd: %s\n", cmdName(cmd));
 
     // Если кнопку отпустили — мгновенный стоп активного мотора
     if (cmd == VMC_NONE) {
-        stopAllMotors(steadyMs());
+        stopAllMotors(nowMs);
     }
 }
 
-static void applySetCalib(uint8_t side, uint16_t sec) {
+static void applySetCalib(uint8_t side, uint16_t sec, uint64_t nowMs) {
     VentLeaf& leaf = (side == 0) ? s_top : s_bottom;
+    // Створка в движении: пройденное до сих пор засчитываем по СТАРОМУ
+    // времени хода и начинаем отсчёт заново. Иначе updateMovingPct
+    // пересчитал бы весь уже пройденный путь по новому и позиция скакнула бы.
+    if (leaf.dir != MD_STOP) {
+        updateMovingPct((side == 0) ? VS_TOP : VS_BOTTOM, nowMs);
+        leaf.pctAtMoveStart = leaf.pct;
+        if (nowMs > leaf.moveStartMs) leaf.moveStartMs = nowMs;
+    }
     leaf.calibMs = (uint32_t)sec * 1000U;
     {
         MutexGuard lock(g_settingsMutex, pdMS_TO_TICKS(50));

@@ -22,6 +22,7 @@
 #include "config.h"
 #include <Arduino.h>
 #include <time.h>
+#include <atomic>
 
 // ═══════════════════════════════════════════════════════════════════
 //  ВНУТРЕННЕЕ СОСТОЯНИЕ
@@ -41,6 +42,13 @@ struct TimerRuntime {
 static TimerRuntime s_rt[NUM_IRRIGATION];
 static bool s_timeAvailable = false;
 static uint64_t s_lastDbgMs = 0;
+
+// Запросы из чужих задач (веб-сокет, MQTT). s_rt[] и реле полива меняет
+// только taskCore1: раньше onModeChanged() из AsyncTCP сбрасывал s_rt[]
+// параллельно со startTimer() в update(), и при неудачном чередовании реле
+// оставалось включённым при таймере в IDLE — клапан открыт до следующего окна.
+static std::atomic<bool>    s_modeAutoReq{false};
+static std::atomic<uint8_t> s_forceOffReq{0};   // битовая маска таймеров
 
 // ═══════════════════════════════════════════════════════════════════
 //  УТИЛИТЫ ВРЕМЕНИ
@@ -300,7 +308,19 @@ static void tryRestore(uint8_t idx, uint64_t nowMs, const TimerCfg& cfg) {
 // ═══════════════════════════════════════════════════════════════════
 //  ОСНОВНОЙ ЦИКЛ UPDATE
 // ═══════════════════════════════════════════════════════════════════
+static void applyModeAuto();
+static void applyForceOff(uint8_t timerIdx);
+
 void TimerSched::update(uint64_t nowMs) {
+    // ── Запросы из чужих задач — до любых проверок режима ───────
+    // Ручной режим ставится раньше, чем приходит forceOff, и update()
+    // ниже вернётся рано; выключение при этом должно состояться.
+    if (s_modeAutoReq.exchange(false)) applyModeAuto();
+    const uint8_t offMask = s_forceOffReq.exchange(0);
+    for (uint8_t i = 0; i < NUM_IRRIGATION; i++) {
+        if (offMask & (1u << i)) applyForceOff(i);
+    }
+
     // ── Авто-активация при NTP sync ─────────────────────────────
     if (!s_timeAvailable) {
         if (NetMgr::isTimeSet()) {
@@ -330,7 +350,10 @@ void TimerSched::update(uint64_t nowMs) {
             if (!lock.locked()) continue;
             cfg = g_settings.timer[i];
         }
-        if (cfg.durationMin == 0) continue;
+        // Длительность 0 — таймер выключен. Но идущий полив всё равно обязан
+        // пройти проверку завершения ниже (durSec = 0 → стоп сразу), иначе
+        // обнуление длительности посреди полива оставляло клапан открытым
+        // навсегда. Новый запуск при 0 невозможен: computeLastFire вернёт 0.
 
         if (s_rt[i].state == TSTATE_ACTIVE) {
             // Проверка на завершение
@@ -428,8 +451,13 @@ uint32_t TimerSched::getRemainingSec(uint8_t timerIdx) {
     return (uint32_t)((durMs - elapsedMs) / 1000ULL);
 }
 
+// Вызывается из AsyncTCP и taskCore1 — только ставит запрос.
 void TimerSched::forceOff(uint8_t timerIdx) {
     if (timerIdx >= NUM_IRRIGATION) return;
+    s_forceOffReq.fetch_or((uint8_t)(1u << timerIdx));
+}
+
+static void applyForceOff(uint8_t timerIdx) {
     if (s_rt[timerIdx].state == TSTATE_ACTIVE) {
         stopTimer(timerIdx);
     } else {
@@ -447,12 +475,16 @@ void TimerSched::forceOff(uint8_t timerIdx) {
 //   2. Сбрасываем s_rt[*] в IDLE.
 //   3. На следующем тике update() сам решит — если попадаем
 //      в активное окно по расписанию, запустит.
+// Вызывается из AsyncTCP и loopTask — только ставит запрос.
 void TimerSched::onModeChanged(bool autoMode) {
     if (!autoMode) {
         // Manual: ничего не делаем (пользователь сам управляет)
         return;
     }
+    s_modeAutoReq.store(true);
+}
 
+static void applyModeAuto() {
     Serial.println(F("[TIMER] Mode -> AUTO: resetting all relays, recalculating"));
     uint64_t nowMs = steadyMs();
     for (uint8_t i = 0; i < NUM_IRRIGATION; i++) {

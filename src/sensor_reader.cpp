@@ -533,9 +533,15 @@ void SensorRdr::update(uint64_t nowMs) {
                 tmp.bmePress = NAN;
                 tmp.bmeOk    = false;
             }
-            if (s_bmeFails == I2C_FAIL_THRESHOLD) {
-                Serial.printf("[SENSOR] BME280: %u errors in a row — I2C recovery\n",
-                    s_bmeFails);
+            // Попытки повторяются, пока сбои не прекратятся: темп задают
+            // кулдаун и DEAD внутри tryI2cRecovery. Раньше вызов был только
+            // при fails == порогу, и если именно тогда мешал кулдаун, счётчик
+            // уходил дальше и шину больше не восстанавливал никто.
+            if (s_bmeFails >= I2C_FAIL_THRESHOLD) {
+                if (s_bmeFails == I2C_FAIL_THRESHOLD) {
+                    Serial.printf("[SENSOR] BME280: %u errors in a row — I2C recovery\n",
+                        s_bmeFails);
+                }
                 tryI2cRecovery(nowMs);
             }
         }
@@ -587,8 +593,10 @@ void SensorRdr::update(uint64_t nowMs) {
         } else {
             tmp.luxOk = false;
             if (s_luxFails < 255) s_luxFails++;
-            if (s_luxFails == I2C_FAIL_THRESHOLD) {
-                Serial.printf("[SENSOR] BH1750: %u errors — I2C recovery\n", s_luxFails);
+            if (s_luxFails >= I2C_FAIL_THRESHOLD) {   // см. BME280 выше
+                if (s_luxFails == I2C_FAIL_THRESHOLD) {
+                    Serial.printf("[SENSOR] BH1750: %u errors — I2C recovery\n", s_luxFails);
+                }
                 tryI2cRecovery(nowMs);
             }
         }
@@ -733,26 +741,7 @@ SensorSnapshot SensorRdr::getData() {
     return out;
 }
 
-float SensorRdr::primaryTemp() {
-    SensorSnapshot s = getData();
-    if (s.bmeOk && !isnan(s.bmeTemp)) return s.bmeTemp;
-    if (s.dhtOk && !isnan(s.dhtTemp)) return s.dhtTemp;
-    return NAN;
-}
-
-float SensorRdr::primaryHum() {
-    SensorSnapshot s = getData();
-    if (s.bmeOk && !isnan(s.bmeHum)) return s.bmeHum;
-    if (s.dhtOk && !isnan(s.dhtHum)) return s.dhtHum;
-    return NAN;
-}
-
-bool SensorRdr::isRaining() {
-    SensorSnapshot s = getData();
-    return s.rain;
-}
-
-float SensorRdr::waterLevelPct() {
-    SensorSnapshot s = getData();
-    return s.waterLevelPct;
-}
+// v6.3: удалены primaryTemp/primaryHum/isRaining/waterLevelPct — вызывающих
+// не было. Первые две подставляли уличный DHT22 вместо внутреннего BME280,
+// то есть ровно ту подмену, от которой отказались в 6.2 (см. main.cpp).
+// Управление берёт значения только из getData().bmeTemp/bmeHum.

@@ -66,19 +66,8 @@ namespace SensorRdr {
     void update(uint64_t nowMs);
 
     // Снимок всех данных (thread-safe, через мьютекс).
+    // Управление теплицей — только по bmeTemp/bmeHum: DHT22 стоит снаружи
+    // и подменять им внутренний датчик нельзя (см. main.cpp, v6.2).
     SensorSnapshot getData();
-
-    // Основная T — BME280 с fallback на DHT22.
-    // NaN если оба датчика отказали.
-    float primaryTemp();
-
-    // Основная H — BME280 с fallback на DHT22.
-    float primaryHum();
-
-    // Идёт ли дождь (прошедший антидребезг).
-    bool isRaining();
-
-    // Уровень воды, %. NaN если датчик отказал.
-    float waterLevelPct();
 
 }  // namespace SensorRdr
