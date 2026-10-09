@@ -20,9 +20,13 @@
 #include "history_logger.h"
 #include "network_manager.h"
 #include "mqtt_manager.h"
+#include "event_log.h"
 #include <ArduinoJson.h>      // v7.x — только JsonDocument
 #include <ESPAsyncWebServer.h>
 #include <Arduino.h>
+#include <stdarg.h>
+#include <esp_heap_caps.h>
+#include <nvs.h>
 
 // ═══════════════════════════════════════════════════════════════════
 //  ГЛОБАЛЬНЫЕ ОБЪЕКТЫ
@@ -39,7 +43,9 @@ static AsyncWebSocket s_ws("/ws");
 // Защищены mutex: WS broadcast может вызываться параллельно с history-ответами.
 #include <freertos/semphr.h>
 static char s_wsTxBuf[WS_TX_BUFFER_SIZE];        // снапшот state — основной
-static char s_wsHistBuf[3200];                   // история (24 точки)
+// v6.3: неделя истории (168 точек) столбцами: ~9 КБ худший случай.
+static char s_wsHistBuf[11264];
+static HistoryPoint s_wsHistPts[HISTORY_POINTS];   // 5,4 КБ — не на стеке AsyncTCP
 static SemaphoreHandle_t s_wsBufMutex = nullptr;
 
 // ═══════════════════════════════════════════════════════════════════
@@ -304,6 +310,85 @@ static void sendStateTo(AsyncWebSocketClient* client) {
         return;
     }
     client->text(s_wsTxBuf, n);
+    if (s_wsBufMutex) xSemaphoreGive(s_wsBufMutex);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  v6.3: СОСТОЯНИЕ СИСТЕМЫ — страница «Состояние» в панели
+// ═══════════════════════════════════════════════════════════════════
+// То же, что строка [HEALTH] в мониторе порта, но в браузере, без USB.
+// Отдаётся по запросу (панель спрашивает раз в 5 с, только пока страница
+// открыта), поэтому JsonDocument здесь допустим.
+static const char* resetReasonCode(esp_reset_reason_t r) {
+    switch (r) {
+        case ESP_RST_POWERON:   return "POWERON";
+        case ESP_RST_EXT:       return "EXT";
+        case ESP_RST_SW:        return "SW";
+        case ESP_RST_PANIC:     return "PANIC";
+        case ESP_RST_INT_WDT:   return "INT_WDT";
+        case ESP_RST_TASK_WDT:  return "TASK_WDT";
+        case ESP_RST_WDT:       return "WDT";
+        case ESP_RST_BROWNOUT:  return "BROWNOUT";
+        case ESP_RST_DEEPSLEEP: return "DEEPSLEEP";
+        default:                return "UNKNOWN";
+    }
+}
+
+static uint32_t stackWmOf(const char* name) {
+    TaskHandle_t h = xTaskGetHandle(name);
+    return h ? (uint32_t)uxTaskGetStackHighWaterMark(h) : 0;
+}
+
+static void sendSysInfo(AsyncWebSocketClient* client) {
+    if (!client) return;
+    JsonDocument doc;
+    doc["type"]    = "sysinfo";
+    char fw[12];
+    snprintf(fw, sizeof(fw), "%d.%d", FW_VERSION_MAJOR, FW_VERSION_MINOR);
+    doc["fw"]      = fw;
+    doc["uptime"]  = (uint32_t)(steadyMs() / 1000ULL);
+    doc["reset"]   = resetReasonCode(esp_reset_reason());
+    doc["heap"]    = ESP.getFreeHeap();
+    doc["heapMin"] = ESP.getMinFreeHeap();
+    doc["largest"] = (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+    doc["nvsWr"]   = settingsNvsWriteCount();
+
+    nvs_stats_t st;
+    if (nvs_get_stats(NULL, &st) == ESP_OK) {
+        JsonObject nvs = doc["nvs"].to<JsonObject>();
+        nvs["used"]  = (uint32_t)st.used_entries;
+        nvs["free"]  = (uint32_t)st.free_entries;
+        nvs["total"] = (uint32_t)st.total_entries;
+    }
+
+    JsonObject wifi = doc["wifi"].to<JsonObject>();
+    wifi["ssid"]   = WiFi.SSID();
+    wifi["rssi"]   = WiFi.RSSI();
+    wifi["ip"]     = WiFi.localIP().toString();
+    wifi["mac"]    = WiFi.macAddress();
+    wifi["rescue"] = NetMgr::isRescueApActive();
+
+    doc["mqtt"]     = MqttMgr::isConnected();
+    doc["timeSync"] = NetMgr::isTimeSet();
+
+    // Запас стека задач, байт: минимум за всё время работы.
+    JsonObject stk = doc["stack"].to<JsonObject>();
+    stk["core1"] = stackWmOf("core1_main");
+    stk["loop"]  = stackWmOf("loopTask");
+    stk["tcp"]   = stackWmOf("async_tcp");
+    stk["wifi"]  = stackWmOf("WiFiWD");
+
+    const SensorSnapshot s = SensorRdr::getData();
+    JsonObject sn = doc["sensors"].to<JsonObject>();
+    sn["bme"]   = s.bmeOk;
+    sn["dht"]   = s.dhtOk;
+    sn["lux"]   = s.luxOk;
+    sn["water"] = s.waterOk;
+
+    if (s_wsBufMutex && xSemaphoreTake(s_wsBufMutex, pdMS_TO_TICKS(50)) != pdTRUE) return;
+    size_t n = serializeJson(doc, s_wsTxBuf, sizeof(s_wsTxBuf));
+    if (n > 0 && n < sizeof(s_wsTxBuf)) client->text(s_wsTxBuf, n);
+    else Serial.println(F("[WS] Serialize overflow — sysinfo skipped"));
     if (s_wsBufMutex) xSemaphoreGive(s_wsBufMutex);
 }
 
@@ -670,39 +755,92 @@ static bool handleSetWaterTank(JsonDocument& doc, const char*& err) {
 // в API второй, расходящийся путь к тем же данным нельзя.
 
 // { "cmd": "get_history" } → шлём клиенту массив точек
-static bool handleGetHistory(AsyncWebSocketClient* client) {
-    HistoryPoint pts[HISTORY_POINTS];
-    uint8_t n = HistoryLogger::getAll(pts, HISTORY_POINTS);
-
-    JsonDocument doc;
-    doc["type"] = "history";
-    JsonArray arr = doc["points"].to<JsonArray>();
+// v6.3: неделя истории — столбцами, без JsonDocument:
+// {"type":"history","t":[...],"T":[...],"H":[...],"P":[...],"L":[...],
+//  "W":[...],"T2":[...],"H2":[...]}, null — нет данных.
+// По объекту на точку 168 точек дали бы ~20 КБ кучи под документ ArduinoJson
+// при каждом подключении панели — для многомесячного аптайма это лишняя
+// фрагментация. Здесь всё пишется в статический буфер.
+// Дописать в s_wsHistBuf; при нехватке места взводит ovf и больше не пишет.
+static size_t s_histLen = 0;
+static bool   s_histOvf = false;
+static void histPut(const char* fmt, ...) {
+    if (s_histOvf) return;
+    const size_t cap = sizeof(s_wsHistBuf);
+    va_list ap;
+    va_start(ap, fmt);
+    int w = vsnprintf(s_wsHistBuf + s_histLen, cap - s_histLen, fmt, ap);
+    va_end(ap);
+    if (w < 0 || (size_t)w >= cap - s_histLen) { s_histOvf = true; return; }
+    s_histLen += (size_t)w;
+}
+static void histColumn(const char* key, float HistoryPoint::* field, bool asInt, uint8_t n) {
+    histPut(",\"%s\":[", key);
     for (uint8_t i = 0; i < n; i++) {
-        JsonObject p = arr.add<JsonObject>();
-        p["t"] = (uint32_t)pts[i].timestamp;
-        if (!isnan(pts[i].temp))        p["T"]  = round(pts[i].temp * 10) / 10.0;
-        if (!isnan(pts[i].humidity))    p["H"]  = round(pts[i].humidity * 10) / 10.0;
-        if (!isnan(pts[i].pressure))    p["P"]  = round(pts[i].pressure * 10) / 10.0;
-        if (!isnan(pts[i].lux))         p["L"]  = (uint32_t)pts[i].lux;
-        if (!isnan(pts[i].waterLevel))  p["W"]  = round(pts[i].waterLevel * 10) / 10.0;
-        // v6.0: DHT22 (снаружи)
-        if (!isnan(pts[i].dhtTemp))     p["T2"] = round(pts[i].dhtTemp * 10) / 10.0;
-        if (!isnan(pts[i].dhtHumidity)) p["H2"] = round(pts[i].dhtHumidity * 10) / 10.0;
+        const float v = s_wsHistPts[i].*field;
+        const char* sep = i ? "," : "";
+        if (isnan(v))   histPut("%snull", sep);
+        else if (asInt) histPut("%s%lu", sep, (unsigned long)v);
+        else            histPut("%s%.1f", sep, (double)v);
     }
+    histPut("]");
+}
 
-    // v6.1: используем static buffer (не на стеке)
+static bool handleGetHistory(AsyncWebSocketClient* client) {
+    // Мьютекс охраняет и буферы, и s_histLen/s_histOvf.
     if (s_wsBufMutex && xSemaphoreTake(s_wsBufMutex, pdMS_TO_TICKS(100)) != pdTRUE) {
         return false;
     }
-    size_t sz = serializeJson(doc, s_wsHistBuf, sizeof(s_wsHistBuf));
-    if (sz == 0 || sz >= sizeof(s_wsHistBuf)) {
+    const uint8_t n = HistoryLogger::getAll(s_wsHistPts, HISTORY_POINTS);
+    s_histLen = 0;
+    s_histOvf = false;
+
+    histPut("{\"type\":\"history\",\"t\":[");
+    for (uint8_t i = 0; i < n; i++) histPut("%s%lu", i ? "," : "", (unsigned long)s_wsHistPts[i].timestamp);
+    histPut("]");
+    histColumn("T",  &HistoryPoint::temp,        false, n);
+    histColumn("H",  &HistoryPoint::humidity,    false, n);
+    histColumn("P",  &HistoryPoint::pressure,    false, n);
+    histColumn("L",  &HistoryPoint::lux,         true,  n);
+    histColumn("W",  &HistoryPoint::waterLevel,  false, n);
+    histColumn("T2", &HistoryPoint::dhtTemp,     false, n);   // DHT22 (снаружи)
+    histColumn("H2", &HistoryPoint::dhtHumidity, false, n);
+    histPut("}");
+    const size_t len = s_histLen;
+
+    if (s_histOvf) {
         Serial.println(F("[WS] History serialize overflow"));
         if (s_wsBufMutex) xSemaphoreGive(s_wsBufMutex);
         return false;
     }
-    client->text(s_wsHistBuf, sz);
+    client->text(s_wsHistBuf, len);
     if (s_wsBufMutex) xSemaphoreGive(s_wsBufMutex);
     return true;
+}
+
+// v6.3: журнал событий для страницы «Журнал событий».
+// {"type":"events","now":1760011200,"up":3600,"ev":[[ts,type,arg,val],...]}
+// now — текущее Unix-время (0, если часы не синхронизированы), up — секунды
+// от запуска: по ним панель переводит записи «до синхронизации» (бит 31 в ts).
+static EvRecord s_wsEvents[EVLOG_SIZE];   // 800 байт — не на стеке AsyncTCP
+static bool sendEvents(AsyncWebSocketClient* client) {
+    if (s_wsBufMutex && xSemaphoreTake(s_wsBufMutex, pdMS_TO_TICKS(100)) != pdTRUE) return false;
+    const uint8_t n = EventLog::getAll(s_wsEvents, EVLOG_SIZE);
+    time_t now = 0;
+    if (NetMgr::isTimeSet()) time(&now);
+    s_histLen = 0;
+    s_histOvf = false;
+    histPut("{\"type\":\"events\",\"now\":%lu,\"up\":%lu,\"ev\":[",
+        (unsigned long)now, (unsigned long)(steadyMs() / 1000ULL));
+    for (uint8_t i = 0; i < n; i++) {
+        const EvRecord& e = s_wsEvents[i];
+        histPut("%s[%lu,%u,%u,%d]", i ? "," : "", (unsigned long)e.ts,
+            (unsigned)e.type, (unsigned)e.arg, (int)e.val);
+    }
+    histPut("]}");
+    if (!s_histOvf) client->text(s_wsHistBuf, s_histLen);
+    if (s_wsBufMutex) xSemaphoreGive(s_wsBufMutex);
+    return !s_histOvf;
 }
 
 // { "cmd": "force_pump_reset" }
@@ -762,6 +900,7 @@ static void handleMessage(AsyncWebSocketClient* client,
         } else {
             Serial.printf("[WS] Client #%u auth FAILED — closing\n", client->id());
             sendAck(client, "auth", false, "bad token");
+            EventLog::authFail();
             authRelease(client->id());
             client->close();
         }
@@ -780,6 +919,12 @@ static void handleMessage(AsyncWebSocketClient* client,
     // v6.3: биение зажатой кнопки — без ответа, без снимка состояния и без
     // записи в журнал: приходит дважды в секунду, пока кнопка держится.
     if (strcmp(cmd, "vent_keepalive") == 0) { VentCtrl::manualKeepAlive(); return; }
+    // v6.3: опросы панели (состояние — раз в секунду, «Состояние системы» — раз
+    // в 5 с) тоже без записи в журнал: иначе это ~86 тыс. строк в сутки, и
+    // в журнале стенда за ними не видно событий.
+    if (strcmp(cmd, "get_state")   == 0) { sendStateTo(client); return; }
+    if (strcmp(cmd, "get_sysinfo") == 0) { sendSysInfo(client); return; }
+    if (strcmp(cmd, "get_events")  == 0) { sendEvents(client);  return; }
 
     Serial.printf("[WS] CMD from #%u: %s\n", client->id(), cmd);
 
@@ -795,7 +940,6 @@ static void handleMessage(AsyncWebSocketClient* client,
     else if (strcmp(cmd, "set_thresholds")       == 0) ok = handleSetThresholds(doc, err);
     else if (strcmp(cmd, "set_timer")            == 0) ok = handleSetTimer(doc, err);
     else if (strcmp(cmd, "set_water_tank")       == 0) ok = handleSetWaterTank(doc, err);
-    else if (strcmp(cmd, "get_state")            == 0) { sendStateTo(client); return; }
     else if (strcmp(cmd, "get_history")          == 0) { ok = handleGetHistory(client); return; }
     else if (strcmp(cmd, "force_pump_reset")     == 0) ok = handlePumpReset();
     else if (strcmp(cmd, "mqtt_resend_discovery")== 0) ok = handleMqttResend();
@@ -803,6 +947,16 @@ static void handleMessage(AsyncWebSocketClient* client,
     else { err = "unknown cmd"; }
 
     sendAck(client, cmd, ok, err);
+
+    // v6.3: смена настроек — в журнал событий. Реле, режимы и движение
+    // форточек туда попадают сами (наблюдатель в EventLog::loop).
+    if (ok) {
+        if      (strcmp(cmd, "set_thresholds") == 0) EventLog::add(EV_SETTINGS, EVS_THRESHOLDS);
+        else if (strcmp(cmd, "set_timer")      == 0) EventLog::add(EV_SETTINGS, EVS_TIMER);
+        else if (strcmp(cmd, "set_water_tank") == 0) EventLog::add(EV_SETTINGS, EVS_WATER);
+        else if (strcmp(cmd, "vent_set_calib") == 0) EventLog::add(EV_SETTINGS, EVS_CALIB);
+        else if (strcmp(cmd, "clear_history")  == 0) EventLog::add(EV_SETTINGS, EVS_HISTORY_CLEARED);
+    }
 
     // После успешной команды — сразу отдаём новое состояние тому,
     // кто команду прислал (мгновенная обратная связь в UI).

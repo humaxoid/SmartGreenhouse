@@ -99,7 +99,7 @@ greenhouse keeps running on its last settings.
 **📊 Monitoring**
 - Temperature, humidity, pressure
 - Illuminance, water level, rain
-- Daily charts that survive reboots and updates
+- Daily and weekly charts that survive reboots and updates; long-term archive in Home Assistant
 
 </td></tr>
 <tr><td valign="top">
@@ -324,7 +324,7 @@ panel language — the page is built into the firmware and is not translated.
 | **Refresh list** | scan again |
 | **Password** | the password of **your home** network |
 | **Show password** | reveal what you typed |
-| **Save & reboot** | save and restart |
+| **Connect** | check the password; if it works, save and restart |
 
 #### 5.2.1 What to do
 
@@ -334,9 +334,14 @@ panel language — the page is built into the firmware and is not translated.
    a 🔒 for protected networks. The closer the number is to zero, the stronger
    the signal: `-45 dBm` is excellent, `-75 dBm` is marginal.
 3. If the list is missing or empty, press **Refresh list** and wait.
-4. Type your network's password into **Password**. Tick **Show password** and
-   read it back: a typo will only reveal itself after the reboot.
-5. Press **Save & reboot**.
+4. Type your network's password into **Password**. **Show password** reveals
+   what you typed.
+5. Press **Connect**. The controller tries the chosen network for up to
+   20 seconds and saves the settings only if it succeeds. A wrong password or
+   a network that cannot be found is reported on the same page, nothing is
+   saved, and you can correct it and try again. While the check runs, your
+   phone may briefly drop off `Greenhouse-XXXXXX`: the radio moves to the home
+   network's channel, which is normal.
 
 > [!NOTE]
 > Limits: the network name may be up to 32 characters, the password up to 63.
@@ -354,22 +359,26 @@ panel language — the page is built into the firmware and is not translated.
 
 #### 5.2.3 What happens after saving
 
-The controller replies `OK`, reboots three seconds later, and the access point
-goes away. Your phone will return to its usual network on its own. The serial
-monitor shows:
+The page shows the controller's address on your home network; eight seconds
+later it reboots and the access point goes away. Your phone will return to its
+usual network on its own. The serial monitor shows:
 
 ```
-[PROV] Saved: ssid="YourNetwork", pass=12 chars. Reboot in 3s.
+[PROV] Testing "YourNetwork"...
+[PROV] Connected (IP 192.168.1.42), saved. Reboot in 8s.
 ...
 [NET] Cache loaded from NVS. SSID="YourNetwork" (configured)
 [NET] Got IP: 192.168.1.42
 ```
 
 > [!NOTE]
-> **Mistyped the password?** The controller will fail to connect and bring the
-> same access point back up — same name, same password. The difference is that
-> `192.168.4.1` now serves the full web panel instead of the portal: go to
-> **Settings → Network** and fix it. No trip to the greenhouse with a USB cable.
+> **Router password changed, or the network is gone?** If the saved network is
+> unavailable at startup, the controller brings the same access point back up —
+> same name, same password. The difference is that it now serves the full web
+> panel instead of the portal: the phone offers to open it, and if it does not,
+> open `http://192.168.4.1`. Fix the network under **Settings → Network**, or
+> press **Forget Wi-Fi** there to get the initial-setup portal back. No trip to
+> the greenhouse with a USB cable.
 
 ### 5.3 Find the controller on the network
 
@@ -504,15 +513,34 @@ panel, or wait an hour for the automatic reset.
 ## 8. 🖥 Web panel
 
 The main screen shows the sensors, sash positions, irrigation, humidifier and
-tank state, plus daily charts — 24 points, one per hour, stored in the file
+tank state, plus charts for a day or a week (the "Day / Week" switch) — 168
+points, one per hour, stored in the file
 system and mirrored in the controller's non-volatile memory, so they survive
 reboots, power loss and container updates. New points push out the oldest
 ones; the charts are erased only by the "Clear history" button. The one
 exception is the first update from version 6.2, which has no mirror yet: the
 history present at that update is not kept.
 
-Settings are split across seven tabs: network, MQTT, access, time, interface,
-update, system. Six color themes and two languages are available; the choice is
+Besides the main screen and settings, the side menu has:
+
+- **History** — the same chart, large, with the "Day / Week" switch and a table
+  of minimum, mean, maximum and latest value for the period.
+- **Event log** — what happened and when: controller starts with the reason
+  (faults in red), alarms, sensor failures, rain, Wi-Fi, irrigation, humidifier
+  and pump switching, vent movement, mode and settings changes, updates, failed
+  sign-in attempts. Filters: All / Alarms / Water / Vents / System. It keeps 32
+  important and 48 routine events separately so routine ones never push out
+  alarms; a copy is stored in non-volatile memory every 10 minutes and before a
+  planned reboot, so an abrupt power loss costs the last few minutes.
+- **System status** — what used to be visible only in the serial monitor:
+  version, uptime and the reason for the last start (faults highlighted in red),
+  free memory and its minimum, settings-memory usage, network and MQTT, sensor
+  health, task stack headroom. Refreshed every 5 seconds while the page is open.
+
+The firmware version and uptime are always shown at the bottom of the menu.
+
+Settings are split across eight tabs: automation, network, MQTT, access, time,
+interface, update, system. Six color themes and two languages are available; the choice is
 stored on the controller and applies on any device. Themes are picked from
 tiles that preview their colors, not from a text list.
 
@@ -584,10 +612,28 @@ appears automatically as `greenhouse-XXXXXX`:
 
 | Type | Entities |
 |---|---|
-| Sensors | temperature, humidity, pressure, illuminance, water level |
+| Sensors | temperature, humidity, pressure, illuminance, water level; outdoor temperature and humidity (DHT22) |
 | Binary sensors | rain, pump fault |
 | Switches | irrigation 1/2/3, humidifier, pump |
 | Covers | upper and lower vents — open, close, stop |
+
+**Archive for any period.** The controller itself keeps one week — that is all
+its non-volatile memory can hold. The long-term archive lives in Home Assistant:
+the sensors are announced with `state_class: measurement`, so on top of raw
+values (about 10 days by default) HA keeps hourly minimum, mean and maximum
+forever — charts for months and years are available under History or with the
+Statistics card. For your own storage (Node-RED → InfluxDB and the like) every
+hourly point is also published as one message to `<base>/history` with the
+exact timestamp:
+
+```json
+{"t":1760011200,"T":24.1,"H":65.0,"P":752.3,"L":42100,"W":60.5,"T2":18.2,"H2":71.0}
+```
+
+`t` is Unix time, `T/H` — inside, `T2/H2` — outside, `P` — mmHg, `L` — lux,
+`W` — water level, %. Fields without data are omitted. If the broker was
+unreachable, only the latest point is sent after reconnecting: MQTT is not a
+store, and missed hours remain in the controller's weekly history.
 
 From Home Assistant you can drive the relays, switch auto/manual modes, and move
 the vents with open, close, and stop commands — the same ones the enclosure
@@ -667,10 +713,16 @@ fails within 30 seconds, the controller brings up a **rescue access point** with
 the same name and password as during initial setup, while continuing to retry
 the home network.
 
-Connect to it and open `http://192.168.4.1` — this is the regular panel with all
-sections. Fix the network under **Settings → Network**. Once the connection
-succeeds, the access point shuts down on its own. Greenhouse automation keeps
-running throughout.
+Connect to it — the phone offers to open the page itself; if it does not, open
+`http://192.168.4.1`. This is the regular panel with all sections (log in with
+the panel login and password). Fix the network under **Settings → Network**, or
+press **Forget Wi-Fi** there to get the initial-setup portal back after the
+reboot. Once the connection succeeds, the access point shuts down on its own.
+Greenhouse automation keeps running throughout.
+
+Since version 6.3 the initial-setup portal checks the password before saving,
+so this normally happens only when the password was changed on the router
+after setup.
 
 </details>
 
@@ -692,7 +744,8 @@ update.
   This wipes everything: network, panel password, calibration, history.
 
 The **factory reset** under System does **not** touch network settings — it
-restores thresholds, schedules, and tank parameters to their defaults.
+restores thresholds, schedules, and tank parameters to their defaults. To switch
+to a different Wi-Fi network, use the **Forget Wi-Fi** button.
 
 </details>
 

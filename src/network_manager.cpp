@@ -11,6 +11,7 @@
 #include "network_manager.h"
 #include "settings.h"
 #include <WiFi.h>
+#include <DNSServer.h>
 #include <Preferences.h>
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
@@ -42,6 +43,10 @@ static std::atomic<bool> s_wifiConnected{false};
 
 // v6.1: поднята ли аварийная точка доступа (см. NetMgr::startRescueAp)
 static std::atomic<bool> s_rescueAp{false};
+
+// v6.3: DNS аварийной точки. Трогается только из loopTask (serviceRescueAp).
+static DNSServer         s_rescueDns;
+static bool              s_rescueDnsOn = false;
 
 // Буфер для getFormattedTime
 static char s_timeBuf[12];
@@ -427,6 +432,25 @@ void NetMgr::stopRescueAp() {
 
 bool NetMgr::isRescueApActive() {
     return s_rescueAp.load();
+}
+
+// v6.3: без перехвата DNS телефон, подключившись к аварийной точке, не
+// понимал, что надо открыть страницу, — владелец ждал окна, как при первой
+// настройке, и не знал про адрес 192.168.4.1. Теперь любое имя указывает
+// на контроллер, а onNotFound веб-сервера отвечает на проверки «есть ли
+// интернет» редиректом на панель (см. web_server_routes.cpp).
+void NetMgr::serviceRescueAp() {
+    const bool want = s_rescueAp.load();
+    if (want && !s_rescueDnsOn) {
+        s_rescueDns.setErrorReplyCode(DNSReplyCode::NoError);
+        s_rescueDnsOn = s_rescueDns.start(53, "*", IPAddress(192, 168, 4, 1));
+        Serial.printf("[NET] Rescue AP DNS %s\n", s_rescueDnsOn ? "started" : "FAILED");
+    } else if (!want && s_rescueDnsOn) {
+        s_rescueDns.stop();
+        s_rescueDnsOn = false;
+        Serial.println(F("[NET] Rescue AP DNS stopped"));
+    }
+    if (s_rescueDnsOn) s_rescueDns.processNextRequest();
 }
 
 const NetCache& NetMgr::cache() {

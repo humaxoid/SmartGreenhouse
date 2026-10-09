@@ -34,6 +34,7 @@
 #include "ws_handler.h"
 #include "web_server_routes.h"
 #include "history_logger.h"
+#include "event_log.h"
 #include "ota_manager.h"
 
 // ═══════════════════════════════════════════════════════════════════
@@ -86,6 +87,9 @@ static void onFirstTimeSync() {
 
     // История данных — начинаем писать с известным временем
     HistoryLogger::onTimeAvailable();
+
+    // Журнал: событиям этого запуска до синхронизации — настоящее время
+    EventLog::onTimeSync();
 
     s_firstNtpCbDone = true;
 }
@@ -209,6 +213,8 @@ static void taskCore1(void* /*param*/) {
         // размонтирован, трогать нельзя (см. блок выше).
         if (!OtaMgr::isUpdating()) {
             HistoryLogger::update(nowMs);
+            // v6.3: наблюдатель журнала событий и его отложенная запись в NVS
+            EventLog::loop(nowMs);
         }
 
         // ── Отложенное сохранение NVS ────────────────────────────
@@ -272,6 +278,8 @@ static void maybeScheduledReboot() {
 
     Serial.printf("[REBOOT] Scheduled reboot after %llu days uptime\n",
         (unsigned long long)(uptimeSec / 86400ULL));
+    EventLog::add(EV_REBOOT, 1);
+    EventLog::flush();
     vTaskDelay(pdMS_TO_TICKS(100));
     ESP.restart();
 #endif
@@ -333,6 +341,10 @@ void setup() {
 
     // ── 3. Настройки + runtime форточек ──────────────────────────
     settingsLoad();
+
+    // v6.3: журнал событий — сразу после NVS, чтобы событие «запуск»
+    // (с причиной сброса) записалось раньше всего остального.
+    EventLog::init();
 
     // ── 4. Восстановление состояний одиночных реле ───────────────
     // (Реле форточек НЕ восстанавливаются — они всегда стартуют в OFF,
@@ -449,6 +461,9 @@ void loop() {
         return;
     }
 
+    // ── v6.3: DNS аварийной точки доступа (если поднята) ─────────
+    NetMgr::serviceRescueAp();
+
     // ── MQTT loop (синхронный клиент PubSubClient) ───────────────
     MqttMgr::loop();
 
@@ -459,6 +474,7 @@ void loop() {
     // v6.1: раньше этим занималась отдельная задача rebootWatch.
     if (WebRoutes::rebootDue()) {
         Serial.println(F("[HTTP] Rebooting now..."));
+        EventLog::flush();   // события последних минут — до перезагрузки
         vTaskDelay(pdMS_TO_TICKS(200));
         ESP.restart();
     }

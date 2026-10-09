@@ -9,6 +9,7 @@
 
 #include "web_server_routes.h"
 #include "settings.h"
+#include "event_log.h"
 #include "network_manager.h"
 #include "mqtt_manager.h"
 #include "ws_handler.h"
@@ -43,6 +44,7 @@ static bool requireAuth(AsyncWebServerRequest* req) {
     if (req->authenticate(nc.webUser, nc.webPass)) return true;
 
     const bool hasHdr = req->hasHeader("Authorization");
+    if (hasHdr) EventLog::authFail();   // неверный пароль, а не просто «ещё не входили»
     Serial.printf("[AUTH] 401 %s %s — %s\n",
         req->methodToString(),
         req->url().c_str(),
@@ -232,6 +234,7 @@ static void handlePostNetwork(AsyncWebServerRequest* req, JsonVariant& json) {
     if (body["pass"].is<const char*>()) {
         const char* p = body["pass"];
         if (strlen(p) > 63) { sendAck(req, false, "password too long", 400); return; }
+        if (p[0] && strlen(p) < 8) { sendAck(req, false, "Wi-Fi password must be 8-63 characters", 400); return; }
         if (p[0]) { strlcpy(nc.pass, p, sizeof(nc.pass)); savePass = true; }
     }
     if (body["ip"].is<const char*>())      strlcpy(nc.ip,      body["ip"],      sizeof(nc.ip));
@@ -247,7 +250,11 @@ static void handlePostNetwork(AsyncWebServerRequest* req, JsonVariant& json) {
             sendAck(req, false, "invalid IP format", 400); return;
         }
     }
-    NetMgr::saveNetSettings(nc, savePass);
+    if (!NetMgr::saveNetSettings(nc, savePass)) {
+        sendAck(req, false, "settings not saved (NVS)", 500);
+        return;
+    }
+    EventLog::add(EV_SETTINGS, EVS_NETWORK);
     sendAck(req, true);
     Serial.println(F("[HTTP] Network settings changed — reboot in 2s"));
     s_rebootPending = true;
@@ -298,6 +305,7 @@ static void handlePostMqtt(AsyncWebServerRequest* req, JsonVariant& json) {
     }
     settingsSaveDeferred();
     MqttMgr::markDiscoveryDirty();
+    EventLog::add(EV_SETTINGS, EVS_MQTT);
     sendAck(req, true);
     Serial.println(F("[HTTP] MQTT settings saved"));
 }
@@ -312,6 +320,7 @@ static void handleWebCreds(AsyncWebServerRequest* req, JsonVariant& json) {
     if (strlen(pass) < 4 || strlen(pass) > 31) { sendAck(req, false, "pass length 4-31", 400); return; }
     NetMgr::saveWebCreds(user, pass);
     Serial.printf("[HTTP] Web credentials changed: %s\n", user);
+    EventLog::add(EV_SETTINGS, EVS_CREDS);
     sendAck(req, true);
 }
 
@@ -351,6 +360,7 @@ static void handlePostNtp(AsyncWebServerRequest* req, JsonVariant& json) {
     // Часовой пояс сдвигает смысл «время старта» — опорные точки расписания
     // полива (интервалы не в сутки) пересчитаются от нового местного времени.
     if (tzChanged) timerAnchorsClear();
+    EventLog::add(EV_SETTINGS, EVS_NTP);
     sendAck(req, true);
     Serial.println(F("[HTTP] NTP settings saved"));
 }
@@ -403,6 +413,7 @@ static void handleFactoryReset(AsyncWebServerRequest* req) {
     if (!requireAuth(req)) return;
     Serial.println(F("[HTTP] FACTORY RESET requested"));
     settingsReset();
+    EventLog::add(EV_SETTINGS, EVS_FACTORY);
     sendAck(req, true);
     s_rebootPending = true;
     s_rebootAtMs = steadyMs() + 2000ULL;
@@ -423,6 +434,7 @@ static void handleResetWifi(AsyncWebServerRequest* req) {
         return;
     }
     Serial.println(F("[HTTP] WiFi credentials cleared — AP provisioning after reboot"));
+    EventLog::add(EV_SETTINGS, EVS_NETWORK);
     sendAck(req, true);
     s_rebootPending = true;
     s_rebootAtMs = steadyMs() + 2000ULL;
@@ -432,6 +444,7 @@ static void handleResetWifi(AsyncWebServerRequest* req) {
 static void handleReboot(AsyncWebServerRequest* req) {
     if (!requireAuth(req)) return;
     Serial.println(F("[HTTP] Manual reboot requested"));
+    EventLog::add(EV_REBOOT, 0);
     sendAck(req, true);
     s_rebootPending = true;
     s_rebootAtMs = steadyMs() + 1000ULL;
@@ -520,10 +533,20 @@ void WebRoutes::init() {
             // отличала «нет доступа» от «нет такого маршрута».
             const NetCache& nc = NetMgr::cache();
             if (!req->authenticate(nc.webUser, nc.webPass)) {
+                if (req->hasHeader("Authorization")) EventLog::authFail();
                 req->send(401, "application/json", "{\"error\":\"unauthorized\"}");
                 return;
             }
             req->send(404, "application/json", "{\"error\":\"not found\"}");
+        } else if (NetMgr::isRescueApActive()) {
+            // v6.3: аварийная точка доступа перехватывает DNS, и проверки
+            // «есть ли интернет» (Android /generate_204, iOS
+            // /hotspot-detect.html, Windows /connecttest.txt) приходят сюда.
+            // Редирект на панель — ОС видит «портал» и сама открывает браузер.
+            AsyncWebServerResponse* resp = req->beginResponse(302);
+            resp->addHeader("Location", "http://192.168.4.1/");
+            resp->addHeader("Cache-Control", "no-store");
+            req->send(resp);
         } else
             req->send(404, "text/plain", "Not found");
     });

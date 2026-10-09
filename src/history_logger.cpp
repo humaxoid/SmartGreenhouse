@@ -16,11 +16,13 @@
 #include "history_logger.h"
 #include "sensor_reader.h"
 #include "network_manager.h"
+#include "mqtt_manager.h"
 #include <Arduino.h>
 #include <LittleFS.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <Preferences.h>
+#include <nvs.h>
 #include <math.h>
 #include <string.h>
 
@@ -28,7 +30,7 @@
 //  ФОРМАТ ФАЙЛА
 // ═══════════════════════════════════════════════════════════════════
 #define HIST_MAGIC     0x48495354UL   // "HIST"
-#define HIST_VERSION   2  // v6.0: формат изменён (добавлены DHT22 поля)
+#define HIST_VERSION   3  // v6.0: +DHT22 (2); v6.3: неделя, 168 точек (3)
 #define HIST_FILE      "/history.bin"
 
 struct HistoryHeader {
@@ -142,21 +144,78 @@ static void saveToFile() {
 // стирает его тоже — графики за сутки пропадали бы при каждом апдейте.
 // NVS при этом не трогается ни прошивкой, ни образом FS.
 //
-// Размер блоба: 8 + 24*32 = 776 байт. Запись раз в час даёт ~8,8 тыс.
-// записей в год; NVS изнашивает страницы по кругу (4 рабочие страницы по
-// ~4 записи блоба каждая), то есть сотни стираний в год против ресурса
-// порядка 100 тыс. — запас на десятилетия.
+// v6.3: неделя (168 точек) в формате HistoryPoint заняла бы 5,4 КБ — четверть
+// всего NVS, а при перезаписи блоба NVS временно держит обе копии. Поэтому
+// в NVS точки лежат упакованными: 18 байт вместо 32 (десятые доли в int16,
+// уровень воды с шагом 0,5 %), блоб 8 + 168*18 = 3032 байта. Точность та же,
+// что показывает панель (одна цифра после запятой).
+//
+// Запись раз в час даёт ~8,8 тыс. записей в год; NVS изнашивает страницы
+// по кругу, стираний — сотни в год против ресурса порядка 100 тыс.
 #define HIST_NVS_NS   "ghist"
 #define HIST_NVS_KEY  "ring"
 
-struct HistoryNvsBlob {
+struct __attribute__((packed)) PackedPoint {
+    uint32_t ts;        // 0 = слот пуст
+    int16_t  t, h, p;   // ×10; INT16_MIN = нет данных
+    uint16_t lux;       // 0xFFFF = нет данных
+    uint8_t  w;         // ×2 (шаг 0,5 %); 0xFF = нет данных
+    int16_t  t2, h2;    // ×10; INT16_MIN = нет данных
+    uint8_t  pad;
+};
+static_assert(sizeof(PackedPoint) == 18, "PackedPoint layout");
+
+struct __attribute__((packed)) HistoryNvsBlob {
     uint32_t     magic;
     uint8_t      version;
     uint8_t      writeIdx;
     uint8_t      count;
     uint8_t      reserved;
-    HistoryPoint points[HISTORY_POINTS];
+    PackedPoint  points[HISTORY_POINTS];
 };
+
+// Формат 6.2 (24 точки HistoryPoint без упаковки) — только для переноса
+// суточной истории при первом запуске после обновления.
+#define HIST_V2_POINTS 24
+struct HistoryNvsBlobV2 {
+    uint32_t     magic;
+    uint8_t      version;
+    uint8_t      writeIdx;
+    uint8_t      count;
+    uint8_t      reserved;
+    HistoryPoint points[HIST_V2_POINTS];
+};
+
+static int16_t packX10(float v) {
+    if (isnan(v)) return INT16_MIN;
+    float r = roundf(v * 10.0f);
+    if (r < -32767.0f) r = -32767.0f;
+    if (r >  32767.0f) r =  32767.0f;
+    return (int16_t)r;
+}
+static float unpackX10(int16_t v) { return v == INT16_MIN ? NAN : v / 10.0f; }
+
+static void packPoint(const HistoryPoint& in, PackedPoint& out) {
+    out.ts  = (uint32_t)in.timestamp;
+    out.t   = packX10(in.temp);
+    out.h   = packX10(in.humidity);
+    out.p   = packX10(in.pressure);
+    out.lux = isnan(in.lux) ? 0xFFFF : (uint16_t)constrain(lroundf(in.lux), 0L, 65534L);
+    out.w   = isnan(in.waterLevel) ? 0xFF : (uint8_t)constrain(lroundf(in.waterLevel * 2.0f), 0L, 254L);
+    out.t2  = packX10(in.dhtTemp);
+    out.h2  = packX10(in.dhtHumidity);
+    out.pad = 0;
+}
+static void unpackPoint(const PackedPoint& in, HistoryPoint& out) {
+    out.timestamp   = (time_t)in.ts;
+    out.temp        = unpackX10(in.t);
+    out.humidity    = unpackX10(in.h);
+    out.pressure    = unpackX10(in.p);
+    out.lux         = in.lux == 0xFFFF ? NAN : (float)in.lux;
+    out.waterLevel  = in.w == 0xFF ? NAN : in.w / 2.0f;
+    out.dhtTemp     = unpackX10(in.t2);
+    out.dhtHumidity = unpackX10(in.h2);
+}
 
 // Снимок буфера под мьютексом: файл и NVS пишутся без лока (это долго),
 // а читать буфер при этом должен кто-то один за раз.
@@ -167,13 +226,13 @@ static bool snapshotBlob(HistoryNvsBlob& out) {
     out.writeIdx = s_writeIdx;
     out.count    = s_count;
     out.reserved = 0;
-    memcpy(out.points, s_buffer, sizeof(out.points));
+    for (uint16_t i = 0; i < HISTORY_POINTS; i++) packPoint(s_buffer[i], out.points[i]);
     xSemaphoreGive(s_mutex);
     return true;
 }
 
 static void saveToNvs() {
-    static HistoryNvsBlob blob;      // 776 байт: не на стеке задачи; вызывается из одной задачи за раз
+    static HistoryNvsBlob blob;      // 3 КБ: не на стеке задачи; вызывается из одной задачи за раз
     if (!snapshotBlob(blob)) {
         Serial.println(F("[HIST] NVS copy skipped: mutex timeout"));
         return;
@@ -189,12 +248,36 @@ static void saveToNvs() {
     prefs.end();
 }
 
+// v6.3: копия формата 6.2 (сутки) — переносим её точки в недельный буфер
+// по порядку времени, чтобы обновление не стирало графики.
+static bool migrateFromV2(Preferences& prefs) {
+    static HistoryNvsBlobV2 old;
+    if (prefs.getBytes(HIST_NVS_KEY, &old, sizeof(old)) != sizeof(old)) return false;
+    if (old.magic != HIST_MAGIC || old.version != 2
+        || old.writeIdx >= HIST_V2_POINTS || old.count > HIST_V2_POINTS) return false;
+    const uint8_t start = (old.count < HIST_V2_POINTS) ? 0 : old.writeIdx;
+    for (uint8_t i = 0; i < old.count; i++) {
+        const HistoryPoint& p = old.points[(start + i) % HIST_V2_POINTS];
+        if (p.timestamp == 0) continue;
+        s_buffer[s_writeIdx] = p;
+        s_writeIdx = (s_writeIdx + 1) % HISTORY_POINTS;
+        if (s_count < HISTORY_POINTS) s_count++;
+    }
+    Serial.printf("[HIST] Migrated %u points from 6.2 NVS format\n", (unsigned)s_count);
+    return true;
+}
+
 // true — буфер заполнен из NVS. Невалидное содержимое не трогает буфер.
 static bool loadFromNvs() {
     static HistoryNvsBlob blob;
     Preferences prefs;
     if (!prefs.begin(HIST_NVS_NS, true)) return false;   // namespace ещё не создан
     const size_t len = prefs.getBytesLength(HIST_NVS_KEY);
+    if (len == sizeof(HistoryNvsBlobV2)) {
+        const bool ok = migrateFromV2(prefs);
+        prefs.end();
+        return ok;
+    }
     if (len != sizeof(blob) || prefs.getBytes(HIST_NVS_KEY, &blob, sizeof(blob)) != sizeof(blob)) {
         prefs.end();
         return false;
@@ -206,7 +289,7 @@ static bool loadFromNvs() {
         Serial.println(F("[HIST] NVS backup invalid - ignored"));
         return false;
     }
-    memcpy(s_buffer, blob.points, sizeof(s_buffer));
+    for (uint16_t i = 0; i < HISTORY_POINTS; i++) unpackPoint(blob.points[i], s_buffer[i]);
     s_writeIdx = blob.writeIdx;
     s_count    = blob.count;
     Serial.printf("[HIST] Restored %u points from NVS backup (writeIdx=%u)\n",
@@ -291,6 +374,10 @@ static void addPoint() {
 
     // Сохраняем: копия в NVS (переживает обновление FS) и файл
     persistHistory();
+
+    // v6.3: ту же точку — в MQTT (топик history) для внешнего архива.
+    // Здесь только атомарный флаг: публикует loopTask (PubSubClient).
+    MqttMgr::markHistoryPoint();
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -334,6 +421,14 @@ void HistoryLogger::init() {
         // Истории нет нигде: создаём пустой файл, чтобы последующие записи
         // были быстрее. NVS пустым блобом не затираем.
         saveToFile();
+    }
+
+    // v6.3: неделя истории занимает ~3 КБ NVS; при перезаписи блоба NVS
+    // временно держит обе копии. Печатаем запас — по нему видно, не тесно ли.
+    nvs_stats_t st;
+    if (nvs_get_stats(NULL, &st) == ESP_OK) {
+        Serial.printf("[HIST] NVS entries: used %u, free %u of %u (32 B each)\n",
+            (unsigned)st.used_entries, (unsigned)st.free_entries, (unsigned)st.total_entries);
     }
 }
 
@@ -380,6 +475,18 @@ uint8_t HistoryLogger::getAll(HistoryPoint* outPoints, uint8_t maxPoints) {
 
     xSemaphoreGive(s_mutex);
     return written;
+}
+
+bool HistoryLogger::getLast(HistoryPoint& out) {
+    if (!s_mutex || xSemaphoreTake(s_mutex, pdMS_TO_TICKS(100)) != pdTRUE) return false;
+    bool ok = false;
+    if (s_count > 0) {
+        const uint8_t idx = (s_writeIdx + HISTORY_POINTS - 1) % HISTORY_POINTS;
+        out = s_buffer[idx];
+        ok = out.timestamp > 0;
+    }
+    xSemaphoreGive(s_mutex);
+    return ok;
 }
 
 void HistoryLogger::clear() {

@@ -18,6 +18,7 @@
 #include <DNSServer.h>
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
+#include <atomic>
 
 // ═══════════════════════════════════════════════════════════════════
 //  ВНУТРЕННЕЕ СОСТОЯНИЕ
@@ -29,6 +30,27 @@ static bool               s_active = false;
 // Флаги успешного сохранения + перезагрузки (отложенная reboot)
 static volatile bool      s_credentialsSaved = false;
 static volatile uint64_t  s_rebootAtMs = 0;
+
+// v6.3: проверка пароля ДО сохранения. Раньше портал сохранял SSID и
+// пароль не глядя и перезагружался; с опечаткой в пароле контроллер
+// уходил в аварийную точку доступа, и вернуть портал можно было только
+// кнопкой «Забыть Wi-Fi», о которой владелец не знал. Теперь /save лишь
+// принимает заявку, а пробное подключение ведёт loop() (loopTask):
+// успех — сохранить и перезагрузиться, отказ — сказать об этом на той же
+// странице. Обработчик HTTP работает в задаче AsyncTCP, ждать в нём
+// 20 секунд нельзя.
+enum ProvTest : uint8_t { PT_IDLE, PT_REQUESTED, PT_RUNNING, PT_OK, PT_FAIL };
+static std::atomic<uint8_t>  s_test{PT_IDLE};
+static char                  s_testSsid[33];
+static char                  s_testPass[64];
+static uint64_t              s_testStartMs = 0;
+static std::atomic<bool>     s_testGotIp{false};
+static std::atomic<uint8_t>  s_testDiscCount{0};
+static std::atomic<uint16_t> s_testLastReason{0};
+static char                  s_testResult[24] = "";   // причина отказа для /status
+static char                  s_testIp[16]     = "";   // адрес в домашней сети при успехе
+#define PROV_TEST_TIMEOUT_MS   20000ULL
+#define PROV_TEST_MAX_DISC     3       // столько отказов подряд — пароль неверный
 
 // Статический IP для AP (стандартный для ESP32 Arduino)
 static const IPAddress    AP_IP(192, 168, 4, 1);
@@ -85,7 +107,7 @@ button:disabled{background:#a0aec0;cursor:wait}
     <span style="font-size:13px;color:#4a5568">Show password</span>
   </label>
 
-  <button type="button" id="submit" onclick="save()">Save & reboot</button>
+  <button type="button" id="submit" onclick="save()">Connect</button>
 
   <div id="msg" class="msg"></div>
 </div>
@@ -123,23 +145,49 @@ function save(){
   var btn=document.getElementById('submit');
   if(!ssid){ showMsg('err','Select a Wi-Fi network'); return; }
   btn.disabled=true;
-  btn.textContent='Saving...';
+  btn.textContent='Checking...';
+  showMsg('ok','Checking the password, up to 20 seconds. Your phone may briefly lose this network — that is normal.');
   var fd=new FormData();
   fd.append('ssid',ssid);
   fd.append('pass',pass);
   fetch('/save',{method:'POST',body:fd}).then(function(r){
-    if(r.ok){
-      showMsg('ok','Settings saved! Device is rebooting. Please connect your phone to your home Wi-Fi network.');
-    }else{
-      showMsg('err','Save error. Please try again.');
-      btn.disabled=false;
-      btn.textContent='Save & reboot';
+    if(r.ok){ poll(Date.now()); }
+    else{ r.text().then(function(t){ fail('Error: '+t); }); }
+  }).catch(function(){ fail('No connection to device'); });
+}
+
+// Опрос результата пробного подключения. Пока контроллер подключается к
+// домашней сети, его точка доступа может переехать на её канал и телефон
+// ненадолго отвалится — ошибки запросов в это время ожидаемы.
+function poll(t0){
+  fetch('/status',{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
+    if(d.state==='ok'){
+      showMsg('ok','Connected! Settings saved, the device is rebooting. Connect your phone to your home Wi-Fi'+
+        (d.ip?' and open http://'+d.ip:'')+'.');
+      return;
     }
-  }).catch(function(){
-    showMsg('err','No connection to device');
-    btn.disabled=false;
-    btn.textContent='Save & reboot';
-  });
+    if(d.state==='fail'){
+      fail(d.reason==='wrong_password'?'Wrong password. Nothing was saved — check the password and try again.':
+           d.reason==='not_found'?'Network not found. Move the device closer to the router or pick another network.':
+           'Could not connect. Nothing was saved — check the password and try again.');
+      return;
+    }
+    next(t0);
+  }).catch(function(){ next(t0); });
+}
+function next(t0){
+  if(Date.now()-t0>60000){
+    fail('Lost contact with the device. If the Greenhouse network is gone, the device has connected and rebooted. '+
+         'If it is still there, reconnect to it and open http://192.168.4.1 again.');
+    return;
+  }
+  setTimeout(function(){ poll(t0); },1000);
+}
+function fail(text){
+  var btn=document.getElementById('submit');
+  showMsg('err',text);
+  btn.disabled=false;
+  btn.textContent='Connect';
 }
 
 function showMsg(type,text){
@@ -242,27 +290,70 @@ static void handleSave(AsyncWebServerRequest* req) {
         req->send(400, "text/plain", "Password too long");
         return;
     }
+    // v6.3: WPA2 требует 8–63 символов; короче — WiFi.begin() не даёт ни одного
+    // события отказа, и проверка ждала бы весь таймаут. Открытая сеть — пустой пароль.
+    if (pass.length() > 0 && pass.length() < 8) {
+        req->send(400, "text/plain", "Password must be 8-63 characters (or empty for an open network)");
+        return;
+    }
 
-    // Формируем NetCache для сохранения.
-    // Начинаем с текущего кэша (чтобы сохранить IP, DNS и т.д.),
-    // только SSID и пароль обновляем.
-    NetCache nc = NetMgr::cache();
-    strlcpy(nc.ssid, ssid.c_str(), sizeof(nc.ssid));
-    strlcpy(nc.pass, pass.c_str(), sizeof(nc.pass));
-    // DHCP по умолчанию при первой настройке — пользователь легко
-    // поменяет потом через веб-панель.
-    nc.isDHCP = true;
+    // v6.3: не сохраняем сразу — ставим заявку на пробное подключение
+    // (см. WifiProv::loop). Буферы пишем, только пока проверка не идёт:
+    // loop() читает их после того, как увидит PT_REQUESTED.
+    const uint8_t st = s_test.load();
+    if (st == PT_REQUESTED || st == PT_RUNNING || st == PT_OK) {
+        req->send(409, "text/plain", "Check already in progress");
+        return;
+    }
+    strlcpy(s_testSsid, ssid.c_str(), sizeof(s_testSsid));
+    strlcpy(s_testPass, pass.c_str(), sizeof(s_testPass));
+    s_test.store(PT_REQUESTED);
 
-    NetMgr::saveNetSettings(nc, true);   // true = сохранить и пароль
-
-    Serial.printf("[PROV] Saved: ssid=\"%s\", pass=%u chars. Reboot in 3s.\n",
+    Serial.printf("[PROV] Test requested: ssid=\"%s\", pass=%u chars\n",
         ssid.c_str(), pass.length());
+    req->send(202, "text/plain", "Checking");
+}
 
-    req->send(200, "text/plain", "OK");
+// Состояние пробного подключения: {"state":"testing|ok|fail|idle", ...}
+static void handleStatus(AsyncWebServerRequest* req) {
+    const uint8_t st = s_test.load();
+    char buf[96];
+    const char* name = (st == PT_OK) ? "ok" : (st == PT_FAIL) ? "fail"
+                     : (st == PT_IDLE) ? "idle" : "testing";
+    snprintf(buf, sizeof(buf), "{\"state\":\"%s\",\"reason\":\"%s\",\"ip\":\"%s\"}",
+        name, st == PT_FAIL ? s_testResult : "", st == PT_OK ? s_testIp : "");
+    AsyncWebServerResponse* resp = req->beginResponse(200, "application/json", buf);
+    resp->addHeader("Cache-Control", "no-store");
+    req->send(resp);
+}
 
-    // Отложенная перезагрузка: даём браузеру получить ответ
-    s_credentialsSaved = true;
-    s_rebootAtMs = (uint64_t)esp_timer_get_time() / 1000ULL + 3000ULL;
+// События STA во время пробного подключения. Контекст event task —
+// только атомарные флаги.
+static void onProvWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
+    if (s_test.load() != PT_RUNNING) return;
+    if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
+        s_testGotIp.store(true);
+    } else if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
+        s_testLastReason.store(info.wifi_sta_disconnected.reason);
+        s_testDiscCount.fetch_add(1);
+    }
+}
+
+// Причина отказа по коду ESP-IDF. Неверный пароль на практике приходит
+// как AUTH_FAIL или как таймаут рукопожатия WPA — по-разному у разных роутеров.
+static const char* testFailReason(uint16_t r) {
+    switch (r) {
+        case WIFI_REASON_NO_AP_FOUND:
+            return "not_found";
+        case WIFI_REASON_AUTH_FAIL:
+        case WIFI_REASON_AUTH_EXPIRE:
+        case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
+        case WIFI_REASON_HANDSHAKE_TIMEOUT:
+        case WIFI_REASON_MIC_FAILURE:
+            return "wrong_password";
+        default:
+            return "failed";
+    }
 }
 
 // Универсальный catch-all: всё что не /portal, /scan, /save → редирект на портал
@@ -357,6 +448,9 @@ void WifiProv::start(const char* ssidPrefix, const char* password) {
     // API
     s_http->on("/scan",    HTTP_GET,  handleScan);
     s_http->on("/save",    HTTP_POST, handleSave);
+    s_http->on("/status",  HTTP_GET,  handleStatus);
+
+    WiFi.onEvent(onProvWiFiEvent);
 
     // Captive detection URL (Android, iOS, Windows, macOS)
     s_http->on("/generate_204",           HTTP_GET, handleCaptiveRedirect);
@@ -379,6 +473,57 @@ void WifiProv::loop() {
 
     // DNS-запросы: это ЛЁГКАЯ операция, безопасно вызывать часто.
     s_dns.processNextRequest();
+
+    // ── v6.3: пробное подключение к выбранной сети ───────────────
+    const uint64_t nowMs = (uint64_t)esp_timer_get_time() / 1000ULL;
+    if (s_test.load() == PT_REQUESTED) {
+        s_testGotIp.store(false);
+        s_testDiscCount.store(0);
+        s_testLastReason.store(0);
+        s_testResult[0] = '\0';
+        s_testIp[0] = '\0';
+        s_testStartMs = nowMs;
+        s_test.store(PT_RUNNING);
+        // Режим AP_STA уже стоит: точка доступа остаётся, телефон может
+        // ненадолго отвалиться, пока радио переходит на канал домашней сети.
+        WiFi.begin(s_testSsid, s_testPass);
+        Serial.printf("[PROV] Testing \"%s\"...\n", s_testSsid);
+    } else if (s_test.load() == PT_RUNNING) {
+        if (s_testGotIp.load()) {
+            strlcpy(s_testIp, WiFi.localIP().toString().c_str(), sizeof(s_testIp));
+            // Формируем NetCache для сохранения.
+            // Начинаем с текущего кэша (чтобы сохранить IP, DNS и т.д.),
+            // только SSID и пароль обновляем.
+            NetCache nc = NetMgr::cache();
+            strlcpy(nc.ssid, s_testSsid, sizeof(nc.ssid));
+            strlcpy(nc.pass, s_testPass, sizeof(nc.pass));
+            // DHCP по умолчанию при первой настройке — пользователь легко
+            // поменяет потом через веб-панель.
+            nc.isDHCP = true;
+            if (NetMgr::saveNetSettings(nc, true)) {
+                Serial.printf("[PROV] Connected (IP %s), saved. Reboot in 8s.\n", s_testIp);
+                s_test.store(PT_OK);
+                // 8 с, а не 3: телефон мог отвалиться при смене канала и
+                // должен успеть вернуться и забрать результат с адресом.
+                s_credentialsSaved = true;
+                s_rebootAtMs = nowMs + 8000ULL;
+            } else {
+                strlcpy(s_testResult, "save_failed", sizeof(s_testResult));
+                WiFi.disconnect(false);
+                s_test.store(PT_FAIL);
+            }
+        } else if (s_testDiscCount.load() >= PROV_TEST_MAX_DISC
+                   || nowMs - s_testStartMs >= PROV_TEST_TIMEOUT_MS) {
+            const uint16_t reason = s_testLastReason.load();
+            strlcpy(s_testResult, reason ? testFailReason(reason) : "timeout",
+                    sizeof(s_testResult));
+            // disconnect(false): STA останавливаем, точку доступа — нет.
+            WiFi.disconnect(false);
+            Serial.printf("[PROV] Test FAILED: %s (reason %u, %u disconnects)\n",
+                s_testResult, (unsigned)reason, (unsigned)s_testDiscCount.load());
+            s_test.store(PT_FAIL);
+        }
+    }
 
     // Отложенная перезагрузка после успешного сохранения
     if (s_credentialsSaved && s_rebootAtMs > 0) {

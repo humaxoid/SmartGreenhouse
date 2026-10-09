@@ -186,3 +186,81 @@ touch-action:manipulation;
    подтягиваются в свободные ячейки, а не оставляют пустоту под короткими соседями */
 @media(min-width:768px){.main-grid{grid-auto-flow:row dense}.irrigation-card{grid-column:1/-1}.irrigation-card .timers-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(min-width:1024px){.chart-card{grid-column:2/-1}}
+.factory-hint{margin-top:8px;max-width:380px}
+/* v6.3: окно настроек одной подсистемы (кнопка «Настроить» в карточке) */
+.cfg-box{max-width:480px;text-align:left;padding:18px 22px 14px;max-height:calc(100vh - 40px);overflow-y:auto}
+.cfg-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--card-border)}
+.cfg-title{font-size:1.15rem;font-weight:700;color:var(--accent2)}
+.cfg-sub{font-size:.86rem;color:var(--text-muted);margin-top:2px}
+.cfg-sheet .cfg-close{position:static;min-width:44px;min-height:44px;margin:-8px -10px 0 0}
+.cfg-sheet .auto-sec>.section-title:first-child{display:none}
+.cfg-all{display:block;width:100%;min-height:44px;margin-top:10px;background:none;border:none;border-top:1px solid var(--card-border);color:var(--accent);font-size:.9rem;cursor:pointer}
+.cfg-all:hover{text-decoration:underline}
+@media(max-width:767px){.cfg-sheet{align-items:flex-end;padding:0}.cfg-box{max-width:none;border-radius:16px 16px 0 0;max-height:88vh;padding:14px 16px 10px}}
+/* v6.3: строка «сводка порогов + Настроить» одинакова во всех трёх карточках:
+   текст слева переносится сам, кнопка всегда справа и не сжимается */
+.auto-sum{flex-wrap:nowrap;gap:12px;padding:10px 12px;border:1px solid var(--card-border);border-radius:10px;line-height:1.35}
+.auto-sum>span{flex:1;min-width:0}
+.auto-sum>.btn-cal{flex:none;white-space:nowrap}
+#pumpAuto .auto-sum{margin-top:12px}
+.water-card-body{align-items:center}
+/* метки порогов насоса на шкале уровня */
+.water-bar-bg .wb-mark{display:none;position:absolute;left:0;right:0;height:2px;margin-bottom:-1px;background:rgba(255,255,255,.9);box-shadow:0 0 0 1px rgba(0,0,0,.28);pointer-events:none}
+/* v6.3: кнопка меню на фото теплицы. Тонкий символ ☰ полупрозрачным белым терялся на
+   светлом стекле в левом верхнем углу баннера. Теперь три плотные полосы на тёмной
+   матовой подложке — читаются на любом участке фотографии и в любой теме. */
+.hamburger{flex-direction:column;align-items:center;justify-content:center;gap:5px;width:44px;height:44px;padding:0;
+  background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.35);border-radius:10px;
+  -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer}
+.hamburger:hover,.hamburger:active{background:rgba(0,0,0,.6)}
+.hamburger:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.hamburger .hb-bar{display:block;width:22px;height:3px;border-radius:2px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.45)}
+@media(max-width:767px){.hamburger{display:flex}}
+/* v6.3: предупреждение на время записи обновления и перезагрузки */
+.ota-warn{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:1000;width:min(560px,calc(100% - 24px));display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:10px;background:#b71c1c;color:#fff;font-weight:600;font-size:.95rem;line-height:1.35;box-shadow:0 6px 24px rgba(0,0,0,.35);animation:otaBlink 1.1s ease-in-out infinite}
+.ota-warn-ico{font-size:1.5rem;line-height:1;flex:none}
+@keyframes otaBlink{0%,100%{background:#b71c1c}50%{background:#e65100}}
+@media(prefers-reduced-motion:reduce){.ota-warn{animation:none}}
+/* v6.3: период графика истории — сегментированный переключатель «Сутки / Неделя» */
+.hist-range{display:inline-flex;border:1px solid var(--card-border);border-radius:9px;overflow:hidden;background:var(--inner)}
+.hist-range button{min-height:36px;min-width:72px;padding:0 14px;border:none;background:none;color:var(--text-dim);font-size:.86rem;font-weight:600;cursor:pointer}
+.hist-range button+button{border-left:1px solid var(--card-border)}
+.hist-range button.active{background:var(--accent);color:#fff}
+@media(pointer:coarse){.hist-range button{min-height:44px}}
+/* v6.3: страницы «История» и «Состояние системы» */
+.sub-view{padding:14px;max-width:1200px;margin:0 auto;width:100%}
+.sub-view>.card,.sub-view #histPageSlot>.card{margin-bottom:14px}
+.chart-big .chart-canvas-wrap{height:min(58vh,460px)}
+.hist-stats-table{width:100%;border-collapse:collapse;font-size:.9rem;font-variant-numeric:tabular-nums}
+.hist-stats-table th,.hist-stats-table td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--card-border)}
+.hist-stats-table tr>th:first-child{text-align:left;color:var(--text-dim);font-weight:600}
+.hist-stats-table tr:first-child th{color:var(--text-muted);font-weight:600;font-size:.86rem}
+.hist-stats-table tr:last-child>*{border-bottom:none}
+.sys-hint{margin:0 2px 12px}
+.sys-grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));align-items:start}
+.sys-row{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;padding:8px 0;border-bottom:1px solid var(--card-border);font-size:.9rem}
+.sys-row:last-child{border-bottom:none}
+.sys-k{color:var(--text-muted)}
+.sys-v{font-weight:600;text-align:right;font-variant-numeric:tabular-nums;color:var(--text);word-break:break-word}
+.sys-v.good{color:var(--on-col)}.sys-v.warn{color:var(--warn)}.sys-v.bad{color:var(--off-col)}
+.sys-bar{flex-basis:100%;height:6px;border-radius:3px;background:var(--inner);overflow:hidden}
+.sys-bar i{display:block;height:100%;background:var(--accent-mid)}
+.sys-bar i.warn{background:var(--warn)}.sys-bar i.bad{background:var(--off-col)}.sys-bar i.good{background:var(--on-col)}
+.sb-ver{display:flex;justify-content:center;gap:5px;font-size:.86rem;color:var(--sidebar-txt);opacity:.75;margin-bottom:6px;font-variant-numeric:tabular-nums}
+/* v6.3: журнал событий */
+.ev-filter{flex-wrap:wrap}
+.ev-filter button{min-width:0}
+.ev-hint{margin:2px 0 10px}
+.ev-day{margin:16px 0 6px;font-size:.86rem;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.04em}
+.ev-day:first-child{margin-top:4px}
+.ev-row{display:flex;align-items:baseline;gap:10px;padding:8px 10px;border-radius:7px;font-size:.92rem;line-height:1.35}
+.ev-row:nth-child(even){background:var(--inner)}
+.ev-row.bad{background:var(--off-bg);color:var(--off-col);font-weight:600}
+.ev-row.warn .ev-text{color:var(--warn);font-weight:600}
+.ev-row.good .ev-text{color:var(--on-col)}
+.ev-time{flex:none;width:5.2em;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.ev-dot{flex:none;width:9px;height:9px;border-radius:50%;align-self:center;background:var(--text-muted)}
+.ev-dot.ev-water{background:#38bdf8}.ev-dot.ev-vents{background:#4ade80}.ev-dot.ev-sys{background:#a78bfa}
+.ev-text{flex:1;min-width:0;color:var(--text)}
+.ev-row.bad .ev-text{color:inherit}
+.ev-empty{padding:24px 0;text-align:center;color:var(--text-muted)}

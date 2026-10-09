@@ -38,6 +38,7 @@
 #include "timer_scheduler.h"
 #include "water_pump_controller.h"
 #include "sensor_reader.h"
+#include "history_logger.h"
 #include "network_manager.h"
 #include "config.h"
 #include <WiFi.h>
@@ -366,6 +367,10 @@ static bool publishSensorDiscovery(
     if (unit)         doc["unit_of_measurement"] = unit;
     if (deviceClass)  doc["device_class"]        = deviceClass;
     if (icon)         doc["icon"]                = icon;
+    // v6.3: без state_class Home Assistant хранит сырые значения ~10 суток и
+    // удаляет; с ним — ещё и почасовые min/среднее/max бессрочно (long-term
+    // statistics). Это и есть архив «за любой период, в том числе прошлые годы».
+    doc["state_class"]  = "measurement";
     doc["object_id"]    = String("greenhouse_") + id;
     writeAvailability(doc);
 
@@ -502,6 +507,12 @@ static bool publishAllDiscovery() {
     ok &= publishSensorDiscovery("lux",      "Освещённость", t, "lx",    "illuminance");
     buildTopic(t, sizeof(t), "sensor/water_level");
     ok &= publishSensorDiscovery("water_level", "Уровень воды", t, "%", nullptr, "mdi:water-percent");
+    // v6.3: наружный DHT22 — отдельными сущностями (раньше только подменял
+    // внутренний датчик при его отказе), чтобы в архиве HA были обе кривые.
+    buildTopic(t, sizeof(t), "sensor/temp_out");
+    ok &= publishSensorDiscovery("temp_out", "Температура снаружи", t, "°C", "temperature");
+    buildTopic(t, sizeof(t), "sensor/humidity_out");
+    ok &= publishSensorDiscovery("humidity_out", "Влажность снаружи", t, "%", "humidity");
 
     // Дождь (binary sensor)
     buildTopic(t, sizeof(t), "sensor/rain");
@@ -569,6 +580,16 @@ static void publishSensors() {
         snprintf(value, sizeof(value), "%.1f", s.waterLevelPct);
         s_mqtt.publish(topic, value);
     }
+    if (s.dhtOk && !isnan(s.dhtTemp)) {
+        buildTopic(topic, sizeof(topic), "sensor/temp_out");
+        snprintf(value, sizeof(value), "%.1f", s.dhtTemp);
+        s_mqtt.publish(topic, value);
+    }
+    if (s.dhtOk && !isnan(s.dhtHum)) {
+        buildTopic(topic, sizeof(topic), "sensor/humidity_out");
+        snprintf(value, sizeof(value), "%.1f", s.dhtHum);
+        s_mqtt.publish(topic, value);
+    }
 
     // Системные
     IPAddress ip = WiFi.localIP();
@@ -626,6 +647,7 @@ static const char* relayTopicSuffix(uint8_t idx) {
 static std::atomic<uint16_t> s_relayDirty{0};   // битовая маска по NUM_RELAYS
 static std::atomic<uint8_t>  s_ventDirty{0};    // биты по форточкам
 static std::atomic<bool>     s_pumpDirty{false};
+static std::atomic<bool>     s_historyDirty{false};   // v6.3: новая часовая точка
 
 // ─── Реальные публикаторы: только из задачи loop! ────────────────
 static void doPublishRelayState(uint8_t idx) {
@@ -662,8 +684,37 @@ static void doPublishPumpState() {
     s_mqtt.publish(topic, WaterPumpCtrl::isInFault() ? "ON" : "OFF", true);
 }
 
+// v6.3: часовая точка истории — одним JSON в топик <base>/history (retained).
+// Для внешнего архива (Node-RED → InfluxDB и т. п.): метка времени точная,
+// а не момент приёма. Поля без данных опускаются.
+// {"t":1760011200,"T":24.1,"H":65.0,"P":752.3,"L":42100,"W":60.5,"T2":18.2,"H2":71.0}
+static bool doPublishHistory() {
+    if (!s_mqtt.connected()) return false;
+    HistoryPoint p;
+    if (!HistoryLogger::getLast(p)) return true;   // публиковать нечего — не повторять
+    char buf[160];
+    int n = snprintf(buf, sizeof(buf), "{\"t\":%lu", (unsigned long)p.timestamp);
+    auto addF = [&](const char* k, float v) {
+        if (!isnan(v) && n > 0 && n < (int)sizeof(buf))
+            n += snprintf(buf + n, sizeof(buf) - n, ",\"%s\":%.1f", k, v);
+    };
+    addF("T", p.temp);  addF("H", p.humidity);  addF("P", p.pressure);
+    if (!isnan(p.lux) && n > 0 && n < (int)sizeof(buf))
+        n += snprintf(buf + n, sizeof(buf) - n, ",\"L\":%lu", (unsigned long)p.lux);
+    addF("W", p.waterLevel);  addF("T2", p.dhtTemp);  addF("H2", p.dhtHumidity);
+    if (n <= 0 || n + 2 > (int)sizeof(buf)) return true;   // не влезло — не зацикливаться
+    buf[n++] = '}'; buf[n] = '\0';
+    char topic[64];
+    buildTopic(topic, sizeof(topic), "history");
+    return s_mqtt.publish(topic, buf, true);
+}
+
 // Слить накопленные пометки. Вызывается только из MqttMgr::loop().
 static void flushDirtyStates() {
+    // Точку, не ушедшую из-за обрыва связи, отправим после переподключения.
+    if (s_historyDirty.exchange(false, std::memory_order_acq_rel) && !doPublishHistory()) {
+        s_historyDirty.store(true, std::memory_order_relaxed);
+    }
     uint16_t relays = s_relayDirty.exchange(0, std::memory_order_acq_rel);
     for (uint8_t i = 0; i < NUM_RELAYS && relays; i++) {
         if (relays & (1u << i)) {
@@ -696,6 +747,10 @@ void MqttMgr::publishVentState(uint8_t ventIdx) {
 
 void MqttMgr::publishPumpState() {
     s_pumpDirty.store(true, std::memory_order_relaxed);
+}
+
+void MqttMgr::markHistoryPoint() {
+    s_historyDirty.store(true, std::memory_order_relaxed);
 }
 
 // ═══════════════════════════════════════════════════════════════════

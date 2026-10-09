@@ -13,6 +13,7 @@
 
 #include "ota_manager.h"
 #include "settings.h"
+#include "event_log.h"
 #include "vent_controller.h"
 #include "relay_manager.h"
 #include "config.h"
@@ -174,6 +175,7 @@ static void setError(const char* msg) {
 // Флаг s_isUpdating до перезагрузки остаётся поднятым намеренно: моторы
 // и реле уже обесточены, а HistoryLogger не должен писать в мёртвый раздел.
 static void abortFailedUpdate() {
+    EventLog::add(EV_OTA, 0, 0);
     if (Update.isRunning()) Update.abort();
     if (s_fsUnmounted.load()) {
         Serial.println(F("[OTA] Update failed after LittleFS was unmounted — rebooting"));
@@ -438,6 +440,7 @@ static void handleUpdateFinish(AsyncWebServerRequest* req) {
     s_uploadActive.store(false);
 
     bool ok = (s_up.phase == UP_DONE);
+    if (ok) EventLog::add(EV_OTA, 0, 1);   // отказ записывает abortFailedUpdate()
     JsonDocument doc;
     doc["ok"] = ok;
     if (!ok) {
@@ -506,6 +509,10 @@ void setupArduinoOTA() {
     ArduinoOTA.onEnd([]() {
         if (s_arduinoOtaIsFs) fsDirtySet(false);   // образ записан целиком
         Serial.println(F("[OTA] ArduinoOTA end"));
+        // ArduinoOTA перезагружает контроллер сам, сразу после onEnd —
+        // журнал сохраняем здесь, до OtaMgr::loop дело не дойдёт.
+        EventLog::add(EV_OTA, 0, 1);
+        EventLog::flush();
     });
     ArduinoOTA.onError([](ota_error_t err) {
         Serial.printf("[OTA] ArduinoOTA error: %u\n", (unsigned)err);
@@ -549,6 +556,7 @@ void OtaMgr::loop() {
     if (s_rebootPending.load() && steadyMs() >= s_rebootAtMs) {
         s_rebootPending.store(false);
         Serial.println(F("[OTA] Rebooting now..."));
+        EventLog::flush();
         Serial.flush();
         delay(100);
         ESP.restart();

@@ -30,16 +30,23 @@
             <div class="sb-info"><span class="sb-rssi" id="sbRssi" title="Wi-Fi RSSI">&#128246;<span class="rssi-bar"><i id="sbRssiFill"></i><b id="sbRssiPct">--%</b></span><span id="sbRssiDbm">-- dBm</span></span><span
                     class="sb-heap" id="sbHeap" title="Free heap">-- KB</span></div><a class="sb-link sb-active"
                 href="#" data-page="dashboard" onclick="showPage('dashboard');return false;"
-                data-i18n="nav_control">Dashboard</a><a class="sb-link" href="#" data-page="settings"
+                data-i18n="nav_control">Dashboard</a><a class="sb-link" href="#" data-page="history"
+                onclick="showPage('history');return false;" data-i18n="nav_history">History</a><a class="sb-link" href="#" data-page="events"
+                onclick="showPage('events');return false;" data-i18n="nav_events">Event log</a><a class="sb-link" href="#"
+                data-page="system" onclick="showPage('system');return false;" data-i18n="nav_system">System status</a><a
+                class="sb-link" href="#" data-page="settings"
                 onclick="showPage('settings');return false;" data-i18n="nav_settings">Settings</a><a class="sb-link"
                 href="#" id="aboutLink" data-i18n="nav_about">About</a>
-            <div class="sb-bottom"><button class="sb-logout" id="btnLogout" onclick="doLogout()"
+            <div class="sb-bottom">
+                <div class="sb-ver"><span>v</span><span id="sbVer">—</span><span class="sb-dot">·</span><span
+                        id="sbUp">—</span></div><button class="sb-logout" id="btnLogout" onclick="doLogout()"
                     data-i18n="btn_logout">Logout</button></div>
         </nav>
         <div class="sb-overlay" id="sbOverlay" onclick="closeSidebar()"></div>
         <div class="main-wrap">
             <header class="top-bar"><button class="hamburger" onclick="toggleSidebar()"
-                    aria-label="Menu">&#9776;</button>
+                    aria-label="Menu"><span class="hb-bar"></span><span class="hb-bar"></span><span
+                        class="hb-bar"></span></button>
                 <div class="top-bar-right">
                     <div class="hdr-block">
                         <div class="hdr-label" id="lblTime" data-i18n="lbl_time">TIME</div>
@@ -139,7 +146,7 @@
                             type="button" class="btn-cal" onclick="ventHomeCancel()" data-i18n="btn_home_cancel">Stop</button></div>
                     <!-- Сводка порогов (только в авто). Сами пороги, калибровка и сброс позиции — Настройки → Автоматика -->
                     <div id="ventAutoSum" class="auto-sum" style="display:none"><span id="ventSumTxt">--</span><button
-                            type="button" class="btn-cal" onclick="goAuto()" data-i18n="btn_configure">Configure</button></div>
+                            type="button" class="btn-cal" onclick="openCfgSheet('vents')" data-i18n="btn_configure">Configure</button></div>
                 </section>
                 <section class="card irrigation-card">
                     <div class="card-title-row">
@@ -215,7 +222,7 @@
                                     data-i18n="lbl_humid_off">Off</span></div>
                         </div>
                         <div class="auto-sum"><span id="humidSumTxt">--</span><button type="button" class="btn-cal"
-                                onclick="goAuto()" data-i18n="btn_configure">Configure</button></div>
+                                onclick="openCfgSheet('humid')" data-i18n="btn_configure">Configure</button></div>
                     </div>
                     <div id="humidManual"><button class="relay-btn off" id="rBtn7" onclick="toggleRelay(7)">OFF</button>
                     </div>
@@ -231,7 +238,8 @@
                     <div class="water-card-body">
                         <div class="water-bar-container">
                             <div class="water-bar-bg">
-                                <div class="water-bar-fill" id="waterBarFill"></div>
+                                <div class="water-bar-fill" id="waterBarFill"></div><i class="wb-mark" id="wbMarkOn"></i><i
+                                    class="wb-mark" id="wbMarkOff"></i>
                             </div>
                             <div class="water-bar-label seg-val" id="waterBarLabel">--%</div>
                         </div>
@@ -246,17 +254,23 @@
                                 &#9888; <span data-i18n="lbl_pump_fault">Pump fault — check sensor</span><button
                                     class="btn-cal" onclick="pumpResetFault()" style="margin-left:6px;padding:3px 8px"
                                     data-i18n="btn_reset_fault">Reset</button></div>
-                            <div id="pumpAuto" style="display:none">
-                                <div class="auto-sum"><span id="pumpSumTxt">--</span><button type="button" class="btn-cal"
-                                        onclick="goAuto()" data-i18n="btn_configure">Configure</button></div>
-                            </div>
                             <div id="pumpManual"><button class="relay-btn off" id="rBtn8"
                                     onclick="toggleRelay(8)">OFF</button></div>
                         </div>
                     </div>
+                    <!-- Сводка — под шкалой на всю ширину карточки, как у форточек и увлажнителя -->
+                    <div id="pumpAuto" style="display:none">
+                        <div class="auto-sum"><span id="pumpSumTxt">--</span><button type="button" class="btn-cal"
+                                onclick="openCfgSheet('pump')" data-i18n="btn_configure">Configure</button></div>
+                    </div>
                 </section>
                 <section class="card chart-card">
-                    <div class="card-title" data-i18n="lbl_history">History (24 h)</div>
+                    <div class="card-title-row">
+                        <div class="card-title" data-i18n="lbl_history">History</div>
+                        <div class="hist-range" role="group"><button type="button" class="active" aria-pressed="true"
+                                onclick="setHistRange(24,this)" data-i18n="hist_day">Day</button><button type="button"
+                                aria-pressed="false" onclick="setHistRange(168,this)" data-i18n="hist_week">Week</button></div>
+                    </div>
                     <div class="chart-tabs"><button class="chart-tab active" onclick="showChart('temp',this)"
                             data-i18n="tab_temp">Temperature</button><button class="chart-tab"
                             onclick="showChart('hum',this)" data-i18n="tab_hum">Humidity</button><button
@@ -269,6 +283,37 @@
                     </div>
                 </section>
             </main>
+            <!-- v6.3: страница «История» — сюда на время показа переезжает карточка графика -->
+            <div class="page-view sub-view" id="pageHistory" style="display:none">
+                <div id="histPageSlot"></div>
+                <section class="card">
+                    <div class="card-title" data-i18n="hist_stats">For the selected period</div>
+                    <div id="histStats" class="hist-stats"></div>
+                </section>
+            </div>
+            <!-- v6.3: страница «Журнал событий» (команда get_events) -->
+            <div class="page-view sub-view" id="pageEvents" style="display:none">
+                <section class="card">
+                    <div class="card-title-row">
+                        <div class="card-title" data-i18n="nav_events">Event log</div>
+                        <div class="ev-filter hist-range" role="group"><button type="button" class="active"
+                                aria-pressed="true" onclick="setEvFilter('all',this)" data-i18n="ev_all">All</button><button
+                                type="button" aria-pressed="false" onclick="setEvFilter('alarms',this)"
+                                data-i18n="ev_alarms">Alarms</button><button type="button" aria-pressed="false"
+                                onclick="setEvFilter('water',this)" data-i18n="ev_water">Water</button><button type="button"
+                                aria-pressed="false" onclick="setEvFilter('vents',this)" data-i18n="ev_vents">Vents</button><button
+                                type="button" aria-pressed="false" onclick="setEvFilter('sys',this)"
+                                data-i18n="ev_sys">System</button></div>
+                    </div>
+                    <p class="hint ev-hint" data-i18n="ev_hint">Important and routine events.</p>
+                    <div id="evList" class="ev-list"></div>
+                </section>
+            </div>
+            <!-- v6.3: страница «Состояние системы» (команда get_sysinfo) -->
+            <div class="page-view sub-view" id="pageSystem" style="display:none">
+                <p class="hint sys-hint" data-i18n="sys_hint">Refreshed every 5 seconds while this page is open.</p>
+                <div class="sys-grid" id="sysGrid"></div>
+            </div>
             <div class="settings-view page-view" id="pageSettings" style="display:none">
                 <div id="statusBar" class="status-bar" style="display:none"></div>
                 <div class="settings-tabs-wrap" id="setTabsWrap"><nav class="settings-tabs" id="setTabs"><button class="set-tab active" onclick="showSettingsTab('auto')"
@@ -283,6 +328,8 @@
                 </nav></div>
                 <div class="card settings-card">
                     <div class="set-pane active" data-pane="auto">
+                        <!-- v6.3: три секции — их же по кнопке «Настроить» показывает окно на главном экране -->
+                        <div class="auto-sec" id="autoSecVents">
                         <div class="section-title" data-i18n="lbl_vents">Vents</div>
                         <div class="vent-thresh-grid">
                             <div class="input-box"><input type="number" id="vTOpen" min="18" max="40" step="0.5"><label
@@ -318,7 +365,9 @@
                             <button class="btn-cal" onclick="ventHomeCancel()" style="margin-left:8px"
                                 data-i18n="btn_home_cancel">Stop</button>
                         </div>
+                        </div>
                         <hr class="set-hr">
+                        <div class="auto-sec" id="autoSecHumid">
                         <div class="section-title" data-i18n="lbl_humidifier">Humidifier</div>
                         <div style="display:flex;gap:10px">
                             <div class="input-box" style="flex:1"><input type="number" id="hmH" min="50" max="100"
@@ -328,7 +377,9 @@
                         </div>
                         <div class="btn-center"><button class="btn-apply" onclick="applyHumidThresholds()"
                                 data-i18n="lbl_apply_hum">Apply</button></div>
+                        </div>
                         <hr class="set-hr">
+                        <div class="auto-sec" id="autoSecPump">
                         <div class="section-title" data-i18n="lbl_water_tank">Water tank</div>
                         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
                             <div class="input-box"><input type="number" id="wtLP" min="0" max="100"
@@ -342,6 +393,7 @@
                         </div>
                         <div class="btn-center"><button class="btn-apply" onclick="applyWaterCfg()"
                                 data-i18n="lbl_apply_water">Apply</button></div>
+                        </div>
                     </div>
                     <div class="set-pane" data-pane="network">
                         <div class="section-title" data-i18n="set_wifi">Wi-Fi parameters</div>
@@ -525,6 +577,9 @@
                                 data-i18n="set_sys_clear_hist">Clear history</button><button class="btn-reset"
                                 style="border-color:var(--off-brd);color:var(--off-col)" onclick="sysFactoryReset()"
                                 data-i18n="set_sys_factory">Factory reset</button></div>
+                        <div class="hint factory-hint" data-i18n="set_sys_factory_hint">Factory
+                            reset does not touch Wi-Fi or the panel password. To change the Wi-Fi network, use Settings
+                            → Network → Forget Wi-Fi.</div>
                         <hr class="set-hr">
                         <div class="section-title" data-i18n="set_sys_info">Information</div>
                         <div class="info-grid">
@@ -563,6 +618,23 @@
         </div>
     </div>
     <div id="aboutOverlay" class="modal-overlay" onclick="closeAbout()"></div>
+    <!-- v6.3: настройки одной подсистемы поверх главного экрана. Содержимое не дублируется:
+         на время показа сюда переносится секция из вкладки «Автоматика» (см. openCfgSheet). -->
+    <div id="cfgSheet" class="modal cfg-sheet" role="dialog" aria-modal="true" aria-labelledby="cfgSheetTitle">
+        <div class="modal-box cfg-box">
+            <div class="cfg-head">
+                <div>
+                    <div class="cfg-title" id="cfgSheetTitle"></div>
+                    <div class="cfg-sub" data-i18n="cfg_sub">Automation settings</div>
+                </div>
+                <button type="button" class="modal-close cfg-close" onclick="closeCfgSheet()" aria-label="Close">&#10005;</button>
+            </div>
+            <div class="cfg-body" id="cfgSheetBody"></div>
+            <button type="button" class="cfg-all" onclick="closeCfgSheet();goAuto()" data-i18n="cfg_all">All automation
+                settings</button>
+        </div>
+    </div>
+    <div id="cfgOverlay" class="modal-overlay" onclick="closeCfgSheet()"></div>
     <div class="offline-overlay" id="offlineOverlay">
         <div class="offline-icon">&#128268;</div>
         <div class="offline-title" data-i18n="offline_title">Controller unavailable</div>
@@ -571,6 +643,8 @@
             data-i18n="offline_btn">&#8635; Reload page</button>
     </div>
     <div id="toastContainer" role="status" aria-live="polite"></div>
+    <div id="otaWarn" class="ota-warn" role="alert" style="display:none"><span class="ota-warn-ico">&#9888;</span><span
+            id="otaWarnText"></span></div>
     <div class="ws-spinner" id="wsSpinner"></div>
     <script src="/app.js"></script>
 </body>

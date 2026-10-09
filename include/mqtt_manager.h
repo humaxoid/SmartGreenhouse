@@ -52,4 +52,8 @@ namespace MqttMgr {
     // Вызывается автоматически при изменении state.
     void publishPumpState();
 
+    // v6.3: записана новая часовая точка истории — отправить её в топик
+    // <base>/history. Только ставит флаг; публикует MqttMgr::loop().
+    void markHistoryPoint();
+
 }  // namespace MqttMgr

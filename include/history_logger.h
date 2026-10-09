@@ -51,6 +51,9 @@ namespace HistoryLogger {
     // Максимум HISTORY_POINTS точек.
     uint8_t getAll(HistoryPoint* outPoints, uint8_t maxPoints);
 
+    // v6.3: последняя записанная точка (для отправки в MQTT). false — истории нет.
+    bool getLast(HistoryPoint& out);
+
     // Очистить историю (команда из веб-панели "сбросить графики")
     void clear();
 
