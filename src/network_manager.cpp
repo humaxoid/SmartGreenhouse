@@ -485,6 +485,14 @@ void NetMgr::initNtp() {
     // Режим умеренной подстройки (не делать резких скачков часов)
     sntp_set_sync_mode(SNTP_SYNC_MODE_IMMED);
 
+    // Интервал синхронизации из настроек (1..24 ч). Раньше ntpUpdateHrs
+    // сохранялся из панели, но нигде не применялся — SNTP всегда ходил
+    // раз в час по умолчанию ESP-IDF.
+    uint8_t hrs = g_settings.ntpUpdateHrs;
+    if (hrs < 1)  hrs = 1;
+    if (hrs > 24) hrs = 24;
+    sntp_set_sync_interval((uint32_t)hrs * 3600000UL);
+
     // POSIX TZ для localtime_r (переход на летнее/зимнее автоматически,
     // если в TZ прописаны правила — для "MSK-3" DST отсутствует).
     const char* tz = g_settings.ntpTzString[0]
@@ -626,31 +634,38 @@ bool NetMgr::saveNetSettings(const NetCache& nc, bool savePass) {
 // v6.1: отдельный путь очистки Wi-Fi. Записи пустой строки мало:
 // если она по какой-то причине не доходит до флеша, контроллер после
 // перезагрузки молча вернётся в ту же сеть, и снаружи это выглядит как
-// неработающая кнопка. Поэтому после записи ключи ещё и удаляются,
-// а результат проверяется чтением из NVS, а не по кэшу в RAM —
-// кэш обновляется в любом случае и об ошибке записи не знает.
+// неработающая кнопка. Поэтому результат проверяется чтением из NVS,
+// а не по кэшу в RAM — кэш обновляется в любом случае и об ошибке
+// записи не знает.
+//
+// Ключи НЕ удаляем: пустая строка в NVS и отсутствие ключа для loadCache()
+// — разные вещи. На отсутствующий ключ подставляется WIFI_DEFAULT_SSID, и
+// при SSID, заданном через build_flags, «Забыть Wi-Fi» подключало бы
+// контроллер к вшитой сети вместо режима настройки (см. loadCache).
 bool NetMgr::clearWifiCredentials() {
     NetCache nc = s_cache;
     nc.ssid[0] = 0;
     nc.pass[0] = 0;
     bool ok = saveNetSettings(nc, true);
 
-    if (!s_prefs.begin("net3", false)) {
+    if (!s_prefs.begin("net3", true)) {
         Serial.println(F("[NET] !!! clearWifiCredentials: NVS begin FAILED !!!"));
         return false;
     }
-    s_prefs.remove("ssid");
-    s_prefs.remove("pass");
-
     char back[sizeof(nc.ssid)] = {0};
-    s_prefs.getString("ssid", back, sizeof(back));
+    const size_t got = s_prefs.getString("ssid", back, sizeof(back));
     s_prefs.end();
+    if (got == 0) {
+        // Ключа нет — после перезагрузки подставится значение по умолчанию.
+        Serial.println(F("[NET] !!! WiFi erase: ssid key missing in NVS"));
+        return false;
+    }
 
     if (back[0]) {
         Serial.printf("[NET] !!! WiFi credentials SURVIVED erase: SSID=\"%s\"\n", back);
         return false;
     }
-    Serial.printf("[NET] WiFi credentials erased (write %s, keys removed)\n",
+    Serial.printf("[NET] WiFi credentials erased (write %s, SSID empty in NVS)\n",
         ok ? "ok" : "FAILED");
     return true;
 }

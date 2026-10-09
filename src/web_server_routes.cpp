@@ -308,32 +308,34 @@ static void handleGetMqtt(AsyncWebServerRequest* req) {
 static void handlePostMqtt(AsyncWebServerRequest* req, JsonVariant& json) {
     if (!requireAuth(req)) return;
     JsonObject body = json.as<JsonObject>();
-    MutexGuard lock(g_settingsMutex, pdMS_TO_TICKS(50));
-    if (!lock.locked()) { sendAck(req, false, "mutex timeout", 503); return; }
 
-    if (body["enabled"].is<bool>()) g_settings.mqttEnabled = body["enabled"];
-    if (body["server"].is<const char*>()) {
-        const char* s = body["server"];
-        if (strlen(s) > 63) { sendAck(req, false, "server too long", 400); return; }
-        strlcpy(g_settings.mqttServer, s, sizeof(g_settings.mqttServer));
-    }
+    // Сначала проверяем ВСЁ, и только потом пишем: раньше поля писались по
+    // одному, и ошибка в порте возвращала 400, оставив новый сервер в работе
+    // (тот же класс ошибки, что исправлен в 6.3 для set_thresholds).
+    const char* server = body["server"].is<const char*>() ? body["server"].as<const char*>() : nullptr;
+    const char* user   = body["user"].is<const char*>()   ? body["user"].as<const char*>()   : nullptr;
+    const char* pass   = body["pass"].is<const char*>()   ? body["pass"].as<const char*>()   : nullptr;
+    int port = -1;
+    if (server && strlen(server) > 63) { sendAck(req, false, "server too long", 400); return; }
     if (body["port"].is<int>()) {
-        int p = body["port"];
-        if (p < 1 || p > 65535) { sendAck(req, false, "port out of range", 400); return; }
-        g_settings.mqttPort = (uint16_t)p;
+        port = body["port"];
+        if (port < 1 || port > 65535) { sendAck(req, false, "port out of range", 400); return; }
     }
-    if (body["user"].is<const char*>()) {
-        const char* u = body["user"];
-        if (strlen(u) > 31) { sendAck(req, false, "user too long", 400); return; }
-        strlcpy(g_settings.mqttUser, u, sizeof(g_settings.mqttUser));
-    }
-    if (body["pass"].is<const char*>()) {
-        const char* p = body["pass"];
-        if (strlen(p) > 31) { sendAck(req, false, "pass too long", 400); return; }
-        if (p[0]) strlcpy(g_settings.mqttPass, p, sizeof(g_settings.mqttPass));
+    if (user && strlen(user) > 31) { sendAck(req, false, "user too long", 400); return; }
+    if (pass && strlen(pass) > 31) { sendAck(req, false, "pass too long", 400); return; }
+
+    {
+        MutexGuard lock(g_settingsMutex, pdMS_TO_TICKS(50));
+        if (!lock.locked()) { sendAck(req, false, "mutex timeout", 503); return; }
+        if (body["enabled"].is<bool>()) g_settings.mqttEnabled = body["enabled"];
+        if (server)       strlcpy(g_settings.mqttServer, server, sizeof(g_settings.mqttServer));
+        if (port > 0)     g_settings.mqttPort = (uint16_t)port;
+        if (user)         strlcpy(g_settings.mqttUser, user, sizeof(g_settings.mqttUser));
+        if (pass && pass[0]) strlcpy(g_settings.mqttPass, pass, sizeof(g_settings.mqttPass));
     }
     settingsSaveDeferred();
     MqttMgr::markDiscoveryDirty();
+    MqttMgr::markReconnect();   // иначе новый адрес вступил бы в силу только после обрыва
     EventLog::add(EV_SETTINGS, EVS_MQTT);
     sendAck(req, true);
     Serial.println(F("[HTTP] MQTT settings saved"));
@@ -389,6 +391,9 @@ static void handlePostNtp(AsyncWebServerRequest* req, JsonVariant& json) {
     // Часовой пояс сдвигает смысл «время старта» — опорные точки расписания
     // полива (интервалы не в сутки) пересчитаются от нового местного времени.
     if (tzChanged) timerAnchorsClear();
+    // Сервер и интервал вступают в силу сразу: раньше reinitNtp() не звал
+    // никто, и новый сервер начинал работать только после перезагрузки.
+    NetMgr::reinitNtp();
     EventLog::add(EV_SETTINGS, EVS_NTP);
     sendAck(req, true);
     Serial.println(F("[HTTP] NTP settings saved"));

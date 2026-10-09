@@ -75,7 +75,7 @@ static const char* resetReasonStr(esp_reset_reason_t r) {
 // ═══════════════════════════════════════════════════════════════════
 //  NTP FIRST SYNC CALLBACK
 // ═══════════════════════════════════════════════════════════════════
-// Вызывается через NetMgr::setOnFirstTimeSet() из taskCore1,
+// Вызывается из taskCore1 (опрос NetMgr::isTimeSet() в цикле),
 // когда NTP впервые синхронизирован. Здесь инициализируем всё,
 // что требует реального времени: расписание таймеров полива,
 // история данных, логирование с датой.
@@ -118,9 +118,12 @@ static uint32_t taskStackWM(const char* name) {
 static void taskCore1(void* /*param*/) {
     esp_task_wdt_add(NULL);
 
-    // Регистрируем коллбэк NTP. Если время уже синхронизировано
-    // (редкий случай), коллбэк вызовется сразу из setOnFirstTimeSet.
-    NetMgr::setOnFirstTimeSet(onFirstTimeSync);
+    // Коллбэк первой синхронизации NTP через NetMgr::setOnFirstTimeSet() больше
+    // не регистрируем: синхронизация почти всегда приходит позже старта этой
+    // задачи, и тогда его вызывала задача WiFiWD — со стеком 3 КБ, на котором
+    // запись истории (блоб NVS, LittleFS, printf с float) могла его переполнить,
+    // а TimerSched::onTimeAvailable() шёл параллельно с update() отсюда же.
+    // Теперь момент синхронизации ловится опросом флага ниже, в этой задаче.
 
     for (;;) {
         esp_task_wdt_reset();
@@ -146,6 +149,9 @@ static void taskCore1(void* /*param*/) {
         //
         // До v6.1 флаг isUpdating() не проверялся вообще нигде.
         if (!OtaMgr::isUpdating()) {
+            // ── Первая синхронизация NTP: таймеры, история, журнал ──
+            if (!s_firstNtpCbDone && NetMgr::isTimeSet()) onFirstTimeSync();
+
             // ── Контроллеры (используют свежие данные датчиков) ──
             //
             // v6.2: управляем ТОЛЬКО по внутреннему BME280. Раньше при его
@@ -361,6 +367,12 @@ void setup() {
     VentCtrl::init();
     TimerSched::init();
 
+    // История — до задач и веб-сервера: её мьютекс создаётся в init(), а
+    // getAll() (панель сразу после перезагрузки) и addPoint() (первая
+    // синхронизация NTP) без него падали бы. Раньше init() стоял последним
+    // шагом setup(), уже после WebRoutes::init() и initNtp().
+    HistoryLogger::init();
+
     // ── 7. Network manager (только регистрация event handler) ────
     NetMgr::init();
 
@@ -374,8 +386,8 @@ void setup() {
     //     и всё это время теплица тоже была без управления.
     //
     // Всё, к чему обращается taskCore1 и что ещё не поднято, к вызовам
-    // без инициализации готово: HistoryLogger и TimerSched выходят по
-    // флагу «времени нет», MqttMgr только ставит атомарный бит,
+    // без инициализации готово: TimerSched выходит по флагу «времени нет»
+    // (HistoryLogger уже инициализирован выше), MqttMgr только ставит атомарный бит,
     // WsHandler::notify* — пустышки, OtaMgr::isUpdating() читает статик.
     esp_task_wdt_init(WDT_TIMEOUT_SEC, true);
     esp_task_wdt_add(NULL);              // сюда же loopTask
@@ -431,9 +443,7 @@ void setup() {
     // ── 13. OTA ──────────────────────────────────────────────────
     OtaMgr::init();
 
-    // ── 14. История ──────────────────────────────────────────────
-    HistoryLogger::init();
-
+    // История инициализирована на шаге 6, до запуска задач.
     // Watchdog и задача Core 1 подняты выше, на шаге 8.
 
     Serial.println(F("[BOOT] Setup complete"));

@@ -22,6 +22,7 @@ std::atomic<bool> g_settingsDirty{false};
 static const char* NVS_NAMESPACE = "gh5";
 static const char* NVS_KEY_BLOB  = "settings";
 static void timerAnchorsLoad();   // ниже: опорные точки расписания полива
+static SemaphoreHandle_t s_saveMutex = nullptr;   // см. settingsSave()
 
 // ═══════════════════════════════════════════════════════════════════
 //  ПРИМЕНЕНИЕ ЗНАЧЕНИЙ ПО УМОЛЧАНИЮ
@@ -119,6 +120,10 @@ void settingsLoad() {
         g_settingsMutex = xSemaphoreCreateRecursiveMutex();
         configASSERT(g_settingsMutex);
     }
+    if (!s_saveMutex) {
+        s_saveMutex = xSemaphoreCreateMutex();
+        configASSERT(s_saveMutex);
+    }
 
     timerAnchorsLoad();   // v6.3: якоря расписания полива — до всего остального
 
@@ -201,7 +206,26 @@ static uint32_t crc32Buf(const void* data, size_t len) {
 
 uint32_t settingsNvsWriteCount() { return s_nvsWriteCount; }
 
+// Сохранение зовут две задачи на разных ядрах: AsyncTCP (пороги, ёмкость,
+// заводской сброс, подготовка к OTA) и taskCore1 (отложенное сохранение,
+// старт и стоп полива). Снимок берётся под g_settingsMutex, а запись идёт
+// уже без него — и без этого мьютекса более ранний снимок мог лечь во флеш
+// последним: новые пороги терялись после перезагрузки, хотя CRC и снятый
+// флаг dirty говорили «записано». Мьютекс держит пару «снимок → запись»
+// целиком. Создаётся в settingsLoad(), до запуска задач (объявлен вверху файла).
+static void settingsSaveLocked();
+
 void settingsSave() {
+    if (s_saveMutex && xSemaphoreTake(s_saveMutex, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        Serial.println(F("[SETTINGS] Save skipped — another save in progress"));
+        g_settingsDirty.store(true);   // отложенное сохранение повторит
+        return;
+    }
+    settingsSaveLocked();
+    if (s_saveMutex) xSemaphoreGive(s_saveMutex);
+}
+
+static void settingsSaveLocked() {
     // Под мьютексом делаем копию — минимизируем время блокировки,
     // т.к. запись в flash может занимать до 50 мс.
     AppSettings copy;

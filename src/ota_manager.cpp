@@ -131,14 +131,21 @@ static void gracefulShutdown(bool isLittleFs) {
     {
         VentStatusSnapshot vs;
         VentCtrl::getStatus(vs);
-        MutexGuard sLock(g_settingsMutex, pdMS_TO_TICKS(100));
-        if (sLock.locked()) {
-            g_settings.ventUpperPos.lastKnownPct  = vs.topPct;
-            g_settings.ventUpperPos.positionValid = 1;
-            g_settings.ventLowerPos.lastKnownPct  = vs.bottomPct;
-            g_settings.ventLowerPos.positionValid = 1;
-            settingsSave();   // немедленно
+        bool changed = false;
+        {
+            MutexGuard sLock(g_settingsMutex, pdMS_TO_TICKS(100));
+            if (sLock.locked()) {
+                g_settings.ventUpperPos.lastKnownPct  = vs.topPct;
+                g_settings.ventUpperPos.positionValid = 1;
+                g_settings.ventLowerPos.lastKnownPct  = vs.bottomPct;
+                g_settings.ventLowerPos.positionValid = 1;
+                changed = true;
+            }
         }
+        // Немедленно, но вне лока настроек: settingsSave() берёт свой мьютекс
+        // сохранения, а под ним — g_settingsMutex; обратный порядок здесь
+        // упирался бы в таймауты при встречном отложенном сохранении.
+        if (changed) settingsSave();
     }
 
     if (isLittleFs) {

@@ -164,10 +164,11 @@ static void buildStateJson(JsonDocument& doc) {
     SensorSnapshot s = SensorRdr::getData();
     JsonObject sensors = doc["sensors"].to<JsonObject>();
 
-    float temp = !isnan(s.bmeTemp) ? s.bmeTemp : s.dhtTemp;
-    float hum  = !isnan(s.bmeHum)  ? s.bmeHum  : s.dhtHum;
-    if (!isnan(temp)) sensors["temp"]     = round(temp * 10) / 10.0;
-    if (!isnan(hum))  sensors["humidity"] = round(hum * 10) / 10.0;
+    // Внутри теплицы — только BME280. Уличный DHT22 сюда не подставляем
+    // (как и в управлении с 6.2): в жару при отказе BME прибор показал бы
+    // уличные +18 вместо +34 внутри. Нет данных — поля нет, bmeOk=false.
+    if (!isnan(s.bmeTemp)) sensors["temp"]     = round(s.bmeTemp * 10) / 10.0;
+    if (!isnan(s.bmeHum))  sensors["humidity"] = round(s.bmeHum  * 10) / 10.0;
 
     // v6.1: раздельные показания DHT22 — то, что снаружи теплицы.
     // temp/humidity выше объединённые, с приоритетом BME280, поэтому
@@ -893,7 +894,16 @@ static void handleMessage(AsyncWebSocketClient* client,
         const char* token = doc["token"];
         if (token && strcmp(token, NetMgr::wsToken()) == 0) {
             WsClientAuth* slot = authSlot(client->id(), true);
-            if (slot) slot->authed = true;
+            if (!slot) {
+                // Все слоты заняты (просроченные уже вычищены sweepUnauthorized
+                // выше). Раньше здесь отвечали «ok», не пометив клиента, и все
+                // его следующие команды молча получали «unauthorized».
+                Serial.printf("[WS] Client #%u: no free auth slot — closing\n", client->id());
+                sendAck(client, "auth", false, "too many connections");
+                client->close();
+                return;
+            }
+            slot->authed = true;
             Serial.printf("[WS] Client #%u authorized\n", client->id());
             sendAck(client, "auth", true);
             sendStateTo(client);

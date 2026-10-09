@@ -547,19 +547,18 @@ static void publishSensors() {
     SensorSnapshot s = SensorRdr::getData();
     char topic[64], value[16];
 
-    if (s.bmeOk || s.dhtOk) {
-        float t = !isnan(s.bmeTemp) ? s.bmeTemp : s.dhtTemp;
-        float h = !isnan(s.bmeHum)  ? s.bmeHum  : s.dhtHum;
-        if (!isnan(t)) {
-            buildTopic(topic, sizeof(topic), "sensor/temp");
-            snprintf(value, sizeof(value), "%.1f", t);
-            s_mqtt.publish(topic, value);
-        }
-        if (!isnan(h)) {
-            buildTopic(topic, sizeof(topic), "sensor/humidity");
-            snprintf(value, sizeof(value), "%.1f", h);
-            s_mqtt.publish(topic, value);
-        }
+    // Внутри — только BME280. Подмена уличным DHT22 записывала бы в архив HA
+    // ряд внутренней температуры уличными значениями; у DHT22 свои сущности
+    // temp_out/humidity_out ниже.
+    if (!isnan(s.bmeTemp)) {
+        buildTopic(topic, sizeof(topic), "sensor/temp");
+        snprintf(value, sizeof(value), "%.1f", s.bmeTemp);
+        s_mqtt.publish(topic, value);
+    }
+    if (!isnan(s.bmeHum)) {
+        buildTopic(topic, sizeof(topic), "sensor/humidity");
+        snprintf(value, sizeof(value), "%.1f", s.bmeHum);
+        s_mqtt.publish(topic, value);
     }
     if (s.bmeOk && !isnan(s.bmePress)) {
         buildTopic(topic, sizeof(topic), "sensor/pressure");
@@ -765,7 +764,22 @@ void MqttMgr::init() {
         s_clientId, s_baseTopic);
 }
 
+// Состояние связи для чужих задач (панель, /api/mqtt). Спрашивать
+// s_mqtt.connected() оттуда нельзя: при потере связи PubSubClient сам зовёт
+// _client->stop() и обнуляет сокет WiFiClient — из AsyncTCP это гонка
+// с publish()/loop() в loopTask и обращение к освобождённому сокету.
+static std::atomic<bool> s_connected{false};
+// Запрос на переподключение после смены настроек брокера (см. markReconnect).
+static std::atomic<bool> s_reconnectReq{false};
+
+static void loopImpl();
+
 void MqttMgr::loop() {
+    loopImpl();
+    s_connected.store(s_mqtt.connected());
+}
+
+static void loopImpl() {
     // Быстрый выход если MQTT выключен в настройках
     bool enabled;
     {
@@ -780,6 +794,15 @@ void MqttMgr::loop() {
     }
 
     uint64_t now = steadyMs();
+
+    // Новые адрес, порт или учётка: tryConnect() читает настройки только при
+    // подключении, поэтому живое соединение со старым брокером рвём сами и
+    // подключаемся заново сразу, не дожидаясь MQTT_RECONNECT_MS.
+    if (s_reconnectReq.exchange(false)) {
+        if (s_mqtt.connected()) s_mqtt.disconnect();
+        Serial.println(F("[MQTT] Settings changed — reconnecting"));
+        s_lastReconnectMs = now - MQTT_RECONNECT_MS;
+    }
 
     if (!s_mqtt.connected()) {
         if (now - s_lastReconnectMs >= MQTT_RECONNECT_MS) {
@@ -839,6 +862,10 @@ void MqttMgr::markDiscoveryDirty() {
     Serial.println(F("[MQTT] Discovery marked dirty"));
 }
 
+void MqttMgr::markReconnect() {
+    s_reconnectReq.store(true);
+}
+
 bool MqttMgr::isConnected() {
-    return s_mqtt.connected();
+    return s_connected.load();
 }
