@@ -51,7 +51,9 @@ font-size:.9rem;font-weight:700;letter-spacing:.04em;
 cursor:pointer;user-select:none;-webkit-user-select:none;
 color:#fff;
 transition:filter .08s,transform .08s,box-shadow .08s;
-touch-action:manipulation;
+/* Кнопка удерживается: с manipulation дрожание пальца начинало прокрутку,
+   браузер слал pointercancel, и привод останавливался посреди хода. */
+touch-action:none;-webkit-touch-callout:none;
 }
 .vent-btn:active{filter:brightness(.72);transform:scale(.93);box-shadow:inset 0 3px 10px rgba(0,0,0,.3)}
 /* v6.1: цвет кодирует ДЕЙСТВИЕ кнопки и не меняется от положения створок.

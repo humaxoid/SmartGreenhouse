@@ -159,6 +159,22 @@ static void buildStateJson(JsonDocument& doc) {
     }
     doc["uptime"] = (uint32_t)(steadyMs() / 1000ULL);
     doc["time"]   = NetMgr::getFormattedTime();
+    // Смещение местного времени контроллера от UTC, секунды. Панель по нему
+    // показывает журнал и график во времени контроллера, а не браузера:
+    // иначе с ноутбука в другом поясе записи не сходились с расписанием полива.
+    if (NetMgr::isTimeSet()) {
+        const time_t now = time(nullptr);
+        struct tm lt, gt;
+        localtime_r(&now, &lt);
+        gmtime_r(&now, &gt);
+        long off = (lt.tm_hour - gt.tm_hour) * 3600L + (lt.tm_min - gt.tm_min) * 60L;
+        if (lt.tm_year != gt.tm_year || lt.tm_yday != gt.tm_yday) {
+            const bool ahead = (lt.tm_year > gt.tm_year)
+                || (lt.tm_year == gt.tm_year && lt.tm_yday > gt.tm_yday);
+            off += ahead ? 86400L : -86400L;
+        }
+        doc["tzOff"] = off;
+    }
 
     // ── Датчики ──────────────────────────────────────────────────
     SensorSnapshot s = SensorRdr::getData();
