@@ -1,0 +1,3 @@
+fastapi>=0.110
+uvicorn>=0.29
+# geoip2>=4.8   # по желанию: страны по IP (нужна база GeoLite2-Country.mmdb)

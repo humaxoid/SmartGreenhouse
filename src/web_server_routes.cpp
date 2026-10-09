@@ -10,6 +10,7 @@
 #include "web_server_routes.h"
 #include "settings.h"
 #include "event_log.h"
+#include "telemetry.h"
 #include "network_manager.h"
 #include "mqtt_manager.h"
 #include "ws_handler.h"
@@ -261,6 +262,34 @@ static void handlePostNetwork(AsyncWebServerRequest* req, JsonVariant& json) {
     s_rebootAtMs = steadyMs() + 2000ULL;
 }
 
+// ── GET/POST /api/telemetry ───────────────────────────────────────
+// v6.3: анонимная статистика. GET отдаёт состояние и ТОЧНЫЙ текст сообщения,
+// чтобы владелец видел, что уходит. POST {"enabled":true|false}.
+static void handleGetTelemetry(AsyncWebServerRequest* req) {
+    if (!requireAuth(req)) return;
+    JsonDocument doc;
+    doc["available"] = Telemetry::isAvailable();
+    doc["enabled"]   = Telemetry::isEnabled();
+    doc["id"]        = Telemetry::deviceId();
+    doc["url"]       = Telemetry::url();
+    const Telemetry::Status st = Telemetry::status();
+    doc["lastOk"]    = st.lastOkTs;
+    doc["lastCode"]  = st.lastCode;
+    doc["sent"]      = st.sent;
+    static char sample[320];                 // AsyncTCP — единственный вызывающий
+    if (Telemetry::buildPayload(sample, sizeof(sample), false)) doc["payload"] = sample;
+    sendJson(req, doc);
+}
+
+static void handlePostTelemetry(AsyncWebServerRequest* req, JsonVariant& json) {
+    if (!requireAuth(req)) return;
+    JsonObject body = json.as<JsonObject>();
+    if (!body["enabled"].is<bool>()) { sendAck(req, false, "enabled (bool) required", 400); return; }
+    if (!Telemetry::isAvailable()) { sendAck(req, false, "not configured in this build", 409); return; }
+    Telemetry::setEnabled(body["enabled"].as<bool>());
+    sendAck(req, true);
+}
+
 // ── GET /api/mqtt ─────────────────────────────────────────────────
 static void handleGetMqtt(AsyncWebServerRequest* req) {
     if (!requireAuth(req)) return;
@@ -488,6 +517,7 @@ void WebRoutes::init() {
     s_server.on("/api/settings", HTTP_GET, handleGetSettings);
     s_server.on("/api/network",  HTTP_GET, handleGetNetwork);
     s_server.on("/api/mqtt",     HTTP_GET, handleGetMqtt);
+    s_server.on("/api/telemetry",HTTP_GET, handleGetTelemetry);
     s_server.on("/api/wifi_scan",HTTP_GET, handleWifiScan);
 
     // POST API с JSON body
@@ -515,6 +545,7 @@ void WebRoutes::init() {
     addJsonPost("/api/webcreds",handleWebCreds);
     addJsonPost("/api/ntp",     handlePostNtp);
     addJsonPost("/api/ui",      handlePostUi);
+    addJsonPost("/api/telemetry", handlePostTelemetry);
 
     // POST без body
     s_server.on("/api/factory_reset", HTTP_POST, handleFactoryReset);

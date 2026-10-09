@@ -264,3 +264,10 @@ touch-action:manipulation;
 .ev-text{flex:1;min-width:0;color:var(--text)}
 .ev-row.bad .ev-text{color:inherit}
 .ev-empty{padding:24px 0;text-align:center;color:var(--text-muted)}
+/* v6.3: раздел «Анонимная статистика» */
+.tlm-text{margin:10px 0;line-height:1.5}
+.tlm-kv{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;padding:6px 0;font-size:.9rem;color:var(--text-muted)}
+.tlm-kv code{color:var(--text);font-family:ui-monospace,Consolas,monospace;word-break:break-all}
+.tlm-details{margin-top:8px}
+.tlm-details summary{cursor:pointer;color:var(--accent);min-height:44px;display:flex;align-items:center}
+.tlm-details pre{margin:6px 0 0;padding:10px 12px;border-radius:7px;background:var(--inner);color:var(--text);font-size:.86rem;white-space:pre-wrap;word-break:break-all}

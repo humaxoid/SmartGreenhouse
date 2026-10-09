@@ -581,6 +581,21 @@
                             reset does not touch Wi-Fi or the panel password. To change the Wi-Fi network, use Settings
                             → Network → Forget Wi-Fi.</div>
                         <hr class="set-hr">
+                        <div id="tlmBox">
+                            <div class="section-title" data-i18n="tlm_title">Anonymous statistics</div>
+                            <div class="dhcp-row"><span class="dhcp-lbl" data-i18n="tlm_enable">Send anonymous statistics to the developer</span><label
+                                    class="toggle"><input type="checkbox" id="tlmEnable"
+                                        onchange="setTelemetry(this.checked)"><span class="toggle-track"></span></label><span
+                                    class="dhcp-lbl" id="tlmState"></span></div>
+                            <p class="hint tlm-text" data-i18n="tlm_text">Off by default.</p>
+                            <p class="hint tlm-na" id="tlmNa" style="display:none" data-i18n="tlm_na">No receiver in this build.</p>
+                            <div class="hint" id="tlmStatus"></div>
+                            <div class="tlm-kv"><span data-i18n="tlm_id">Device ID</span><code id="tlmId">—</code></div>
+                            <div class="tlm-kv" id="tlmUrlRow"><span data-i18n="tlm_to">Receiver</span><code id="tlmUrl">—</code></div>
+                            <details class="tlm-details"><summary data-i18n="tlm_show">Show exactly what is sent</summary><pre
+                                    id="tlmPayload"></pre></details>
+                        </div>
+                        <hr class="set-hr">
                         <div class="section-title" data-i18n="set_sys_info">Information</div>
                         <div class="info-grid">
                             <div><span class="info-k" data-i18n="info_fw">Firmware:</span> <span class="info-v"

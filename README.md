@@ -646,6 +646,39 @@ buttons use, with the upper → lower handoff.
 
 ---
 
+## 10.1 📊 Anonymous statistics
+
+An optional feature for the developer: **off by default**, switched on with the
+toggle in "Settings → System → Anonymous statistics", and only available in a
+build with a receiver address (`TELEMETRY_URL` in `config.h` or
+`-D TELEMETRY_URL=\"https://...\"` at build time). A normal build has no
+address — nothing is sent and the toggle is disabled.
+
+Once an hour (and once after boot) the controller sends one HTTPS message with
+certificate verification:
+
+| Field | Meaning |
+|---|---|
+| `id` | device identifier: salted hash of the factory MAC, 16 characters; the MAC itself is not revealed |
+| `fw` | firmware version |
+| `inst` | install date on this controller (first run of this firmware with accurate time) |
+| `up` | uptime, seconds |
+| `tz` | time zone from the settings |
+| `rr` | reason for the last start (`POWERON`, `SW`, `BROWNOUT` …) |
+| `hm` | minimum free memory since start |
+| `mq` | whether MQTT is on |
+| `lan` | the controller's address on your local network |
+
+The external IP address and country are determined by the **receiver** from the
+connection itself — the controller neither knows nor sends them. **Never sent:**
+Wi-Fi name and password, panel and MQTT passwords, sensor readings, relay
+states. The "Show exactly what is sent" button in the panel prints the current
+message verbatim.
+
+The receiver and the owner's admin page live in `tools/telemetry_server`.
+
+---
+
 ## 11. 🩺 Diagnostics
 
 Serial monitor, baud rate **115200**.

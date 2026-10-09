@@ -1,0 +1,20 @@
+[Unit]
+Description=Greenhouse telemetry receiver
+After=network.target
+
+[Service]
+User=ghtlm
+Group=ghtlm
+WorkingDirectory=/opt/gh-telemetry
+EnvironmentFile=/etc/gh-telemetry.env
+ExecStart=/opt/gh-telemetry/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8088 --workers 1
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/gh-telemetry
+
+[Install]
+WantedBy=multi-user.target
