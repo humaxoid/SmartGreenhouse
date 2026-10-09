@@ -340,7 +340,8 @@ static void pollHoldButtons() {
 // Вызывается из task Core1 примерно каждые 50 мс.
 void BtnMgr::processEvents() {
     // 1) Toggle-кнопки (полив)
-    uint8_t events = s_events.exchange(0, std::memory_order_acq_rel);
+    // uint16_t, как и сама маска: в uint8_t восьмая и следующие кнопки терялись бы.
+    uint16_t events = s_events.exchange(0, std::memory_order_acq_rel);
     if (events) {
         for (int i = 0; i < NUM_BUTTONS; i++) {
             if (!(events & (1u << i)) || BTN_IS_HOLD[i]) continue;

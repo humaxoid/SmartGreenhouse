@@ -606,7 +606,9 @@ window.loadMqttSettings=loadMqttSettings;function onDhcpModeChange(){var isStati
 window.onDhcpModeChange=onDhcpModeChange;async function applyNet(){var body={ssid:$('ssid').value,pass:$('wPas').value,isDHCP:!$('modeSwitch').checked,ip:$('ipAddr').value,subnet:$('subnet').value,gateway:$('gateway').value,dns1:$('dns1').value,dns2:$('dns2').value};try{var r=await fetchJson('/api/network',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(r.ok)toast(i18n('toast_saved')+'. '+i18n('msg_rebooting'),'success');else toast(r.error||i18n('err_generic'),'error');}catch(e){toast(i18n('err_generic')+': '+e.message,'error');}}
 window.applyNet=applyNet;async function resetWifi(){if(!confirm(i18n('toast_confirm_forget_wifi')))return;try{await fetchJson('/api/reset_wifi',{method:'POST'});toast(i18n('msg_rebooting'),'info');}
 catch(e){toast(e.message,'error');}}
-window.resetWifi=resetWifi;function scanWifi(){var list=$('wifiScanList');if(!list)return;list.style.display='block';list.textContent=i18n('wifi_scanning');fetchJson('/api/wifi_scan').then(function(d){if(!d.networks||!d.networks.length){list.textContent=i18n('wifi_none');return;}
+window.resetWifi=resetWifi;// Скан на контроллере асинхронный: пока он идёт, ответ {"scanning":true} — спрашиваем
+// снова раз в секунду (до 20 раз), пока не придёт список.
+function scanWifi(tries){tries=tries|0;var list=$('wifiScanList');if(!list)return;list.style.display='block';if(!tries)list.textContent=i18n('wifi_scanning');fetchJson('/api/wifi_scan').then(function(d){if(d.scanning){if(tries<20)setTimeout(function(){scanWifi(tries+1);},1000);else list.textContent=i18n('wifi_scan_failed');return;}if(!d.networks||!d.networks.length){list.textContent=i18n('wifi_none');return;}
 // v6.3: имена сетей приходят из эфира, то есть от любого соседа, — вставлять
 // их как разметку нельзя. Раньше шло через innerHTML и inline-onclick: имя
 // вида <img onerror=...> выполнялось в панели, где в sessionStorage лежит

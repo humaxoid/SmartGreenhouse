@@ -125,6 +125,7 @@ namespace NetMgr {
     // ушёл в режим первоначальной настройки. Возвращает false, если после
     // всех попыток учётные данные в NVS уцелели.
     bool clearWifiCredentials();
-    void saveWebCreds(const char* user, const char* pass);
+    // false — запись в NVS не удалась, прежние логин и пароль остаются в силе.
+    bool saveWebCreds(const char* user, const char* pass);
 
 }  // namespace NetMgr

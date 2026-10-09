@@ -32,7 +32,8 @@ extern const uint8_t rootca_crt_bundle_start[] asm("_binary_x509_crt_bundle_star
 #define TLM_TIMEOUT_MS    6000
 #define TLM_MIN_BLOCK     45000          // нужен непрерывный блок под TLS-буферы (2×16 КБ + служебные)
 
-static bool         s_enabled = false;
+static std::atomic<bool> s_enabled{false};   // пишет AsyncTCP (setEnabled), читает loopTask
+static std::atomic<bool> s_kickReq{false};   // «включили — отправить в ближайшую минуту»
 static uint32_t     s_install = 0;       // Unix-время первого запуска с часами; 0 — ещё не знаем
 static char         s_id[17] = "";
 static bool         s_bootSent = false;  // первое сообщение после запуска ещё не ушло
@@ -99,10 +100,9 @@ void Telemetry::setEnabled(bool on) {
         p.putBool("en", on);
         p.end();
     }
-    if (on) {                       // включили — первое сообщение в ближайшую минуту
-        s_bootSent = false;
-        s_nextMs = steadyMs() + 20000ULL;
-    }
+    // Включили — первое сообщение в ближайшую минуту. Расписание (64-битное s_nextMs)
+    // правит только loop() в своей задаче: отсюда, из AsyncTCP, только флаг.
+    if (on) s_kickReq.store(true);
     Serial.printf("[TLM] %s\n", on ? "enabled" : "disabled");
 }
 
@@ -186,6 +186,10 @@ static bool sendOnce() {
 
 void Telemetry::loop(uint64_t nowMs) {
     rememberInstallTime();
+    if (s_kickReq.exchange(false)) {
+        s_bootSent = false;
+        s_nextMs = nowMs + 20000ULL;
+    }
     if (!isEnabled()) return;
     if (nowMs < s_nextMs) return;
     if (!NetMgr::isConnected() || OtaMgr::isUpdating()) { s_nextMs = nowMs + 30000ULL; return; }

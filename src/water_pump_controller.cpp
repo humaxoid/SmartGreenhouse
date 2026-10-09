@@ -19,6 +19,7 @@
 #include "config.h"
 #include <Arduino.h>
 #include <math.h>
+#include <atomic>
 
 // ═══════════════════════════════════════════════════════════════════
 //  ВНУТРЕННЕЕ СОСТОЯНИЕ
@@ -35,6 +36,9 @@ static uint64_t  s_pumpStartMs     = 0;   // Время включения на�
 static uint64_t  s_faultStartMs    = 0;   // Время входа в FAULT
 static bool      s_sensorFailed    = false;
 static uint64_t  s_lastDbgMs       = 0;
+// Сброс аварии просят панель (задача AsyncTCP) и кнопка; s_state меняет только
+// update() в taskCore1 — иначе сброс мог перезаписать состояние посреди его тика.
+static std::atomic<bool> s_resetReq{false};
 
 // Время авто-сброса аварии, мс (1 час)
 #define FAULT_AUTO_RESET_MS   (60ULL * 60ULL * 1000ULL)
@@ -68,6 +72,11 @@ static void enterFault(uint64_t nowMs, const char* reason) {
 // ═══════════════════════════════════════════════════════════════════
 void WaterPumpCtrl::update(float waterLevelPct) {
     const uint64_t nowMs = steadyMs();
+
+    if (s_resetReq.exchange(false) && s_state == PUMP_FAULT) {
+        s_state = PUMP_IDLE;
+        Serial.println(F("[PUMP] FAULT manually reset"));
+    }
 
     // ── Читаем настройки и режим под мьютексом ───────────────────
     uint8_t  mode;
@@ -236,9 +245,7 @@ bool WaterPumpCtrl::isInFault() {
     return s_state == PUMP_FAULT;
 }
 
+// Из любой задачи: только запрос, исполняет update() на ближайшем тике.
 void WaterPumpCtrl::resetFault() {
-    if (s_state == PUMP_FAULT) {
-        s_state = PUMP_IDLE;
-        Serial.println(F("[PUMP] FAULT manually reset"));
-    }
+    s_resetReq.store(true);
 }

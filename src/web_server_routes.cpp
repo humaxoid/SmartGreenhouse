@@ -349,7 +349,10 @@ static void handleWebCreds(AsyncWebServerRequest* req, JsonVariant& json) {
     const char* pass = body["pass"] | "";
     if (strlen(user) < 1 || strlen(user) > 31) { sendAck(req, false, "user length 1-31", 400); return; }
     if (strlen(pass) < 4 || strlen(pass) > 31) { sendAck(req, false, "pass length 4-31", 400); return; }
-    NetMgr::saveWebCreds(user, pass);
+    if (!NetMgr::saveWebCreds(user, pass)) {
+        sendAck(req, false, "credentials not saved (NVS)", 500);
+        return;
+    }
     Serial.printf("[HTTP] Web credentials changed: %s\n", user);
     EventLog::add(EV_SETTINGS, EVS_CREDS);
     sendAck(req, true);
@@ -426,9 +429,18 @@ static void handlePostUi(AsyncWebServerRequest* req, JsonVariant& json) {
 }
 
 // ── GET /api/wifi_scan ────────────────────────────────────────────
+// Скан асинхронный: синхронный держал задачу AsyncTCP до ~4 с (13 каналов по
+// 300 мс) — замирали веб-сокет и биения зажатой кнопки форточек, и привод мог
+// остановиться по истечении аренды. Теперь первый запрос запускает скан и
+// отвечает {"scanning":true}, панель повторяет запрос, пока не придёт список.
 static void handleWifiScan(AsyncWebServerRequest* req) {
     if (!requireAuth(req)) return;
-    int n = WiFi.scanNetworks(false, false, false, 300);
+    const int n = WiFi.scanComplete();
+    if (n == WIFI_SCAN_RUNNING || n < 0) {
+        if (n != WIFI_SCAN_RUNNING) WiFi.scanNetworks(true, false, false, 300);
+        req->send(200, "application/json", "{\"scanning\":true}");
+        return;
+    }
     JsonDocument doc;
     JsonArray arr = doc["networks"].to<JsonArray>();
     int maxN = (n > 20) ? 20 : n;

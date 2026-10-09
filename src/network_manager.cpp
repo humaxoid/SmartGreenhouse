@@ -670,13 +670,25 @@ bool NetMgr::clearWifiCredentials() {
     return true;
 }
 
-void NetMgr::saveWebCreds(const char* user, const char* pass) {
+// Запись проверяется: раньше результат не смотрел никто, и при сбое NVS панель
+// говорила «Сохранено», а после перезагрузки возвращался старый пароль.
+// Кэш в RAM меняется только при успехе — иначе до перезагрузки работал бы
+// пароль, которого нет во флеше.
+bool NetMgr::saveWebCreds(const char* user, const char* pass) {
+    if (!s_prefs.begin("net3", false)) {
+        Serial.println(F("[NET] !!! NVS begin(net3) FAILED — web credentials NOT saved !!!"));
+        return false;
+    }
+    const bool ok = s_prefs.putString("wusr", user) == strlen(user)
+                 && s_prefs.putString("wpas", pass) == strlen(pass);
+    s_prefs.end();
+    if (!ok) {
+        Serial.println(F("[NET] !!! Web credentials write FAILED"));
+        return false;
+    }
     strlcpy(s_cache.webUser, user, sizeof(s_cache.webUser));
     strlcpy(s_cache.webPass, pass, sizeof(s_cache.webPass));
-    s_prefs.begin("net3", false);
-    s_prefs.putString("wusr", user);
-    s_prefs.putString("wpas", pass);
-    s_prefs.end();
     rebuildToken();
     Serial.println(F("[NET] Web credentials saved"));
+    return true;
 }
