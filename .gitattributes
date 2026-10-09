@@ -3,3 +3,5 @@
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
+# Файлы для Linux-сервера: только LF (CRLF ломает unit-файл systemd и nginx)
+tools/telemetry_server/* text eol=lf
