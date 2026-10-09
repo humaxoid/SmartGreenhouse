@@ -17,7 +17,8 @@ class AsyncWebServer;  // forward declaration
 namespace WsHandler {
 
     // Инициализация. Создаёт AsyncWebSocket handler.
-    // Вызывать ПОСЛЕ NetMgr::init() (нужен wsToken).
+    // Вызывать ПОСЛЕ NetMgr::init(). Авторизация сокета — токен сессии
+    // из POST /api/login (auth_session.h).
     void init();
 
     // Регистрация в AsyncWebServer. Вызывается из WebRoutes::init().

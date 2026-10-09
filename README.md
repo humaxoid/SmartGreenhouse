@@ -394,7 +394,10 @@ under **Settings → Network**.
 Open the address in a browser and sign in with login `admin` and password
 `admin`. Then, in order:
 
-1. **Settings → Access** — change the login and password. Do this first
+1. **Settings → Access** — change the login and password (password: 8+
+   characters). The panel opens this tab itself: while the factory `admin` /
+   `admin` is in use, the controller shows readings but **accepts no changes
+   and no firmware updates**
 2. **Settings → Time** — pick your time zone. Irrigation timers do not run
    without correct time
 3. **Settings → Automation → Calibration** — measure the full travel time of each sash with a
@@ -426,12 +429,18 @@ By default all subsystems start in **automatic** mode.
 |---|---|---|---|
 | Setup access point | `192.168.4.1` | — | `12345678` |
 | Web panel | assigned by router | `admin` | `admin` |
-| Network flashing (ArduinoOTA) | `greenhouse-XXXXXX.local` | — | web panel password |
+| Network flashing (ArduinoOTA) | `greenhouse-XXXXXX.local` | — | its own; the channel is off by default |
 
 > [!WARNING]
-> **Change the web panel password right after your first sign-in.** The same
-> password protects network flashing: while it is still `admin`, anyone on your
-> local network can upload arbitrary code to the controller.
+> **Change the web panel password at your first sign-in.** While the factory
+> `admin` / `admin` is in use, the controller refuses changes and firmware
+> updates — otherwise anyone on your network, or near the rescue access point,
+> could sign in with the password from this guide.
+
+The browser does not store the password: the panel sends it once at sign-in
+and receives a session token. A session ends after a day without requests, on
+sign-out, on a password change (in every open panel) and when the controller
+reboots — the panel then asks you to sign in again.
 
 The access point password can only be changed by rebuilding — the
 `WIFI_AP_PASSWORD` constant in [`include/config.h`](include/config.h).
@@ -583,20 +592,45 @@ anything else. Before writing, the controller de-energizes the actuators, saves
 sash positions, and halts automation. It reboots on its own once the update
 succeeds.
 
+#### Signed updates
+
+The container is signed with an ECDSA P-256 key, and firmware built with that
+key **accepts signed containers only**: the signature is checked before the
+first flash write, the firmware and panel hashes before the boot partition is
+switched. Without the signature, foreign firmware cannot be uploaded even with
+the panel password.
+
+- **The key** lives outside the repository: `~/.greenhouse/ota_signing_key.pem`
+  or the path in `GH_OTA_KEY`. Create it with
+  `openssl ecparam -name prime256v1 -genkey -noout -out ~/.greenhouse/ota_signing_key.pem`.
+  `openssl` must be on PATH (Git for Windows ships one) or set in `GH_OPENSSL`.
+- **The build** picks the key up by itself: it embeds the public part into the
+  firmware and signs `greenhouse_vX.Y.bin`. No key — an "unsigned" build with
+  a warning; such firmware accepts unsigned containers too.
+- **Keep a copy of the key.** If it is lost, no signed update can be built;
+  firmware with a new key can only be flashed over USB.
+- **Moving from unsigned firmware.** Firmware before 6.3 only knows the
+  unsigned format. Build the first container with `GH_CONTAINER_V1=1` — it is
+  unsigned, but the firmware inside already carries the key; every update
+  after that is signed.
+
 ### 9.2 Over the network from VS Code
 
 ```bash
 pio run -e ota -t upload
 ```
 
-Before first use, fill in the `[env:ota]` section of
-[`platformio.ini`](platformio.ini): the device name
+The channel is off by default. To turn it on, set a **separate** password under
+**Settings → Access → Network flashing from PlatformIO** (8–31 characters,
+different from the panel password) and reboot the controller. Then fill in the
+`[env:ota]` section of [`platformio.ini`](platformio.ini): the device name
 (`greenhouse-XXXXXX.local`, printed in the serial monitor) and `--auth=` with
-the web panel password.
+that password — locally, without committing it.
 
 > [!NOTE]
-> This channel updates **firmware only**. It does not touch the web panel
-> files — those need the container or a USB upload.
+> This channel updates **firmware only** and **bypasses the signature check** —
+> it is a development tool. Keep it off (empty password) on the device in the
+> greenhouse.
 
 ### 9.3 Over USB
 

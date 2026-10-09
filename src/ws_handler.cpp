@@ -21,6 +21,7 @@
 #include "network_manager.h"
 #include "mqtt_manager.h"
 #include "event_log.h"
+#include "auth_session.h"
 #include <ArduinoJson.h>      // v7.x — только JsonDocument
 #include <ESPAsyncWebServer.h>
 #include <Arduino.h>
@@ -62,9 +63,9 @@ static SemaphoreHandle_t s_wsBufMutex = nullptr;
 // Поэтому авторизация СВОЯ, на уровне протокола:
 //
 //   1. Клиент подключается. Состояние не отдаётся, команды не принимаются.
-//   2. Первым сообщением клиент шлёт {"cmd":"auth","token":"<base64 user:pass>"}.
-//   3. Токен сверяется с NetMgr::wsToken() — той же строкой, что
-//      используется для HTTP Basic Auth. Отдельных учёток не заводим.
+//   2. Первым сообщением клиент шлёт {"cmd":"auth","token":"<токен сессии>"}.
+//   3. Токен — сессия, выданная POST /api/login (auth_session.h).
+//      Отдельных учёток не заводим.
 //   4. При совпадении клиент помечается авторизованным и получает снапшот.
 //      При несовпадении — ошибка и разрыв соединения.
 //
@@ -80,6 +81,7 @@ struct WsClientAuth {
     uint32_t id;          // 0 = слот свободен
     bool     authed;
     uint64_t connectedMs;
+    char     token[AuthSess::TOKEN_BUF];   // сессия, которой клиент авторизовался
 };
 static WsClientAuth s_auth[WS_AUTH_SLOTS] = {};
 
@@ -93,18 +95,14 @@ static WsClientAuth* authSlot(uint32_t id, bool createIfMissing) {
     freeSlot->id          = id;
     freeSlot->authed      = false;
     freeSlot->connectedMs = steadyMs();
+    freeSlot->token[0]    = '\0';
     return freeSlot;
 }
 
 static void authRelease(uint32_t id) {
     for (uint8_t i = 0; i < WS_AUTH_SLOTS; i++) {
-        if (s_auth[i].id == id) { s_auth[i] = {0, false, 0}; return; }
+        if (s_auth[i].id == id) { s_auth[i] = {}; return; }
     }
-}
-
-static bool isAuthed(uint32_t id) {
-    WsClientAuth* s = authSlot(id, false);
-    return s && s->authed;
 }
 
 // Закрыть соединения, которые подключились и не авторизовались вовремя.
@@ -117,7 +115,7 @@ static void sweepUnauthorized() {
         Serial.printf("[WS] Client #%u dropped — no auth within %u s\n",
             (unsigned)s_auth[i].id, (unsigned)(WS_AUTH_TIMEOUT_MS / 1000));
         s_ws.close(s_auth[i].id);
-        s_auth[i] = {0, false, 0};
+        s_auth[i] = {};
     }
 }
 
@@ -902,13 +900,13 @@ static void handleMessage(AsyncWebSocketClient* client,
     const char* cmd = doc["cmd"];
     if (!cmd) { sendAck(client, "?", false, "missing cmd"); return; }
 
-    // ── v6.1: авторизация ────────────────────────────────────────
-    // Токен тот же, что у HTTP Basic Auth: base64("логин:пароль").
-    // Отдельной учётки для сокета нет намеренно — иначе появилось бы
-    // второе место, где пароль надо менять и легко забыть.
+    // ── Авторизация ──────────────────────────────────────────────
+    // Токен — сессия из POST /api/login (см. auth_session.h), а не
+    // base64("логин:пароль"), как до переделки: пароль в браузере больше
+    // не хранится. Отдельной учётки для сокета по-прежнему нет.
     if (strcmp(cmd, "auth") == 0) {
         const char* token = doc["token"];
-        if (token && strcmp(token, NetMgr::wsToken()) == 0) {
+        if (token && AuthSess::valid(token)) {
             WsClientAuth* slot = authSlot(client->id(), true);
             if (!slot) {
                 // Все слоты заняты (просроченные уже вычищены sweepUnauthorized
@@ -920,6 +918,7 @@ static void handleMessage(AsyncWebSocketClient* client,
                 return;
             }
             slot->authed = true;
+            strlcpy(slot->token, token, sizeof(slot->token));
             Serial.printf("[WS] Client #%u authorized\n", client->id());
             sendAck(client, "auth", true);
             sendStateTo(client);
@@ -935,10 +934,21 @@ static void handleMessage(AsyncWebSocketClient* client,
 
     // Всё остальное — только после авторизации. Состояние тоже:
     // до неё сокет не отдаёт ни данных датчиков, ни настроек.
-    if (!isAuthed(client->id())) {
+    WsClientAuth* me = authSlot(client->id(), false);
+    if (!me || !me->authed) {
         Serial.printf("[WS] Client #%u: '%s' before auth — rejected\n",
             client->id(), cmd);
         sendAck(client, cmd, false, "unauthorized");
+        return;
+    }
+    // Сессия могла закончиться после авторизации сокета: смена пароля
+    // сбрасывает все сессии, выход из панели — свою. Проверка на каждой
+    // команде заодно продлевает сессию, пока панель открыта.
+    if (!AuthSess::valid(me->token)) {
+        Serial.printf("[WS] Client #%u: session ended — closing\n", client->id());
+        me->authed = false;
+        sendAck(client, "auth", false, "session expired");
+        client->close();
         return;
     }
 
@@ -953,6 +963,12 @@ static void handleMessage(AsyncWebSocketClient* client,
     if (strcmp(cmd, "get_events")  == 0) { sendEvents(client);  return; }
 
     Serial.printf("[WS] CMD from #%u: %s\n", client->id(), cmd);
+
+    // Заводские admin/admin: читать можно, менять — нет (см. web_server_routes.cpp).
+    if (NetMgr::credsAreDefault() && strcmp(cmd, "get_history") != 0) {
+        sendAck(client, cmd, false, "default_credentials");
+        return;
+    }
 
     const char* err = nullptr;
     bool ok = false;

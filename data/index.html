@@ -476,8 +476,16 @@
                                 class="pass-eye" onclick="togglePass('wbPass')">&#128065;</button></div>
                         <div class="btn-row"><button class="btn-apply" onclick="applyWebCreds()"
                                 data-i18n="set_save_creds">Save credentials</button></div>
-                        <p class="warn-note" data-i18n="set_creds_warn">&#9888; You will need to re-login after change
+                        <p class="warn-note" data-i18n="set_creds_warn">&#9888; Other open panels will need to sign in again
                         </p>
+                        <div class="section-title" data-i18n="set_ota_pass_title">Network flashing from PlatformIO</div>
+                        <p class="hint" data-i18n="set_ota_pass_hint">Separate password for ArduinoOTA. Empty — the channel is off.</p>
+                        <div class="input-box pass-wrap"><input type="password" id="otaPass" autocomplete="new-password"
+                                placeholder=" "><label data-i18n="set_ota_pass">ArduinoOTA password</label><button
+                                type="button" class="pass-eye" onclick="togglePass('otaPass')">&#128065;</button></div>
+                        <p class="hint" id="otaPassState"></p>
+                        <div class="btn-row"><button type="button" class="btn-apply" onclick="applyOtaPass()"
+                                data-i18n="set_ota_pass_save">Save</button></div>
                     </div>
                     <div class="set-pane" data-pane="ntp">
                         <div class="section-title" data-i18n="set_ntp_title">Time synchronization (NTP)</div>

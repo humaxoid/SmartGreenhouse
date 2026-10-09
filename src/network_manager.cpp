@@ -26,7 +26,6 @@
 //  ВНУТРЕННЕЕ СОСТОЯНИЕ
 // ═══════════════════════════════════════════════════════════════════
 static NetCache      s_cache;
-static char          s_wsToken[96];
 static Preferences   s_prefs;
 
 // NTP: time_set флаг атомарный — выставляется в коллбэке из другой задачи.
@@ -51,36 +50,9 @@ static bool              s_rescueDnsOn = false;
 // Буфер для getFormattedTime
 static char s_timeBuf[12];
 
-// ═══════════════════════════════════════════════════════════════════
-//  BASE64 (RFC 4648)
-// ═══════════════════════════════════════════════════════════════════
-// Для HTTP Basic Auth. Самописный, чтобы не тянуть лишнюю зависимость.
-static const char B64[] =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-static uint32_t base64Encode(const char* src, char* dst, uint32_t dstSize) {
-    uint32_t in  = 0, out = 0;
-    uint32_t len = (uint32_t)strlen(src);
-    while (in < len && out + 5 < dstSize) {
-        uint32_t v  = 0;
-        int      nb = 0;
-        v  = (uint8_t)src[in++] << 16; nb = 1;
-        if (in < len) { v |= (uint8_t)src[in++] << 8; nb = 2; }
-        if (in < len) { v |= (uint8_t)src[in++];      nb = 3; }
-        dst[out++] = B64[(v >> 18) & 0x3F];
-        dst[out++] = B64[(v >> 12) & 0x3F];
-        dst[out++] = (nb >= 2) ? B64[(v >>  6) & 0x3F] : '=';
-        dst[out++] = (nb >= 3) ? B64[(v >>  0) & 0x3F] : '=';
-    }
-    dst[out] = '\0';
-    return out;
-}
-
-static void rebuildToken() {
-    char plain[68];
-    snprintf(plain, sizeof(plain), "%s:%s", s_cache.webUser, s_cache.webPass);
-    base64Encode(plain, s_wsToken, sizeof(s_wsToken));
-}
+// v6.3: удалены base64Encode() и rebuildToken(). Они строили токен
+// веб-сокета base64("логин:пароль") — то есть пароль в чуть другой форме.
+// Сокет теперь авторизуется токеном сессии (auth_session.h).
 
 // ═══════════════════════════════════════════════════════════════════
 //  NVS загрузка/сохранение
@@ -118,9 +90,9 @@ static void loadCache() {
     readStr("dns2", s_cache.dns2,    sizeof(s_cache.dns2),    NET_DEFAULT_DNS2);
     readStr("wusr", s_cache.webUser, sizeof(s_cache.webUser), WEB_DEFAULT_USER);
     readStr("wpas", s_cache.webPass, sizeof(s_cache.webPass), WEB_DEFAULT_PASS);
+    readStr("otap", s_cache.otaPass, sizeof(s_cache.otaPass), "");   // пусто — ArduinoOTA выключен
 
     s_prefs.end();
-    rebuildToken();
     // v6.1: печатаем то, от чего зависит ключевая развилка в setup().
     // Без этой строки «контроллер не поднял точку доступа» неотличимо
     // от «контроллер не стёр SSID» — а лечится это по-разному.
@@ -457,8 +429,25 @@ const NetCache& NetMgr::cache() {
     return s_cache;
 }
 
-const char* NetMgr::wsToken() {
-    return s_wsToken;
+bool NetMgr::saveOtaPass(const char* pass) {
+    if (!s_prefs.begin("net3", false)) {
+        Serial.println(F("[NET] !!! NVS begin(net3) FAILED — OTA password NOT saved !!!"));
+        return false;
+    }
+    const bool ok = s_prefs.putString("otap", pass) == strlen(pass);
+    s_prefs.end();
+    if (!ok) {
+        Serial.println(F("[NET] !!! OTA password write FAILED"));
+        return false;
+    }
+    strlcpy(s_cache.otaPass, pass, sizeof(s_cache.otaPass));
+    Serial.printf("[NET] ArduinoOTA password %s (applies after reboot)\n", pass[0] ? "set" : "cleared");
+    return true;
+}
+
+bool NetMgr::credsAreDefault() {
+    return strcmp(s_cache.webUser, WEB_DEFAULT_USER) == 0
+        && strcmp(s_cache.webPass, WEB_DEFAULT_PASS) == 0;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -688,7 +677,6 @@ bool NetMgr::saveWebCreds(const char* user, const char* pass) {
     }
     strlcpy(s_cache.webUser, user, sizeof(s_cache.webUser));
     strlcpy(s_cache.webPass, pass, sizeof(s_cache.webPass));
-    rebuildToken();
     Serial.println(F("[NET] Web credentials saved"));
     return true;
 }

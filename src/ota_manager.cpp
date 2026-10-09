@@ -18,6 +18,7 @@
 #include "relay_manager.h"
 #include "config.h"
 #include "network_manager.h"
+#include "auth_session.h"
 #include <Arduino.h>
 #include <ArduinoOTA.h>
 #include <ESPAsyncWebServer.h>
@@ -25,7 +26,10 @@
 #include <ArduinoJson.h>
 #include <LittleFS.h>
 #include <esp_task_wdt.h>
+#include <mbedtls/sha256.h>
+#include <mbedtls/pk.h>
 #include <atomic>
+#include "ota_pubkey.h"   // генерирует tools/ota_pubkey.py: OTA_PUBKEY_PEM или ничего
 
 namespace {
 
@@ -42,6 +46,7 @@ uint64_t          s_rebootAtMs = 0;
 std::atomic<bool> s_fsUnmounted{false};
 std::atomic<bool> s_uploadActive{false};
 bool              s_arduinoOtaIsFs = false;   // текущая сессия ArduinoOTA пишет FS
+bool              s_arduinoOtaOn   = false;   // ArduinoOTA запущен (задан свой пароль)
 
 // ═══════════════════════════════════════════════════════════════════
 //  ФОРМАТ КОНТЕЙНЕРА (заголовок 32 байта)
@@ -60,6 +65,18 @@ struct __attribute__((packed)) GhfwHeader {
 };
 static_assert(sizeof(GhfwHeader) == 32, "GhfwHeader must be exactly 32 bytes");
 
+// v6.3: формат 2 — подписанный. За 32-байтной частью (formatVer = 2) идут
+// SHA-256 прошивки и образа FS, длина подписи и подпись ECDSA P-256 (DER)
+// байтов 0..95, всего 176 байт (см. tools/pack_firmware.py). Подпись
+// проверяется сразу после заголовка, до первой записи во флеш; хэши —
+// перед Update.end() каждой части, то есть до переключения загрузки.
+// Прошивка, собранная с ключом (OTA_PUBKEY_PEM), принимает ТОЛЬКО формат 2.
+#define GHFW_HDR_V1       32
+#define GHFW_HDR_V2       176
+#define GHFW_SIGNED_PART  96
+#define GHFW_SIG_OFF      100
+#define GHFW_SIG_MAX      72
+
 // ═══════════════════════════════════════════════════════════════════
 //  СОСТОЯНИЕ ПРИЁМА КОНТЕЙНЕРА
 // ═══════════════════════════════════════════════════════════════════
@@ -77,8 +94,10 @@ enum UploadPhase : uint8_t {
 struct UploadState {
     UploadPhase phase;
     GhfwHeader  hdr;
-    uint8_t     hdrBuf[sizeof(GhfwHeader)];
+    uint8_t     hdrBuf[GHFW_HDR_V2];
+    uint32_t    hdrNeed;         // сколько байт заголовка ждём: 32, для формата 2 — 176
     uint32_t    hdrFilled;       // сколько байт заголовка собрано
+    bool        hashed;          // формат 2: сверять SHA-256 частей
     uint32_t    fwWritten;       // сколько firmware байт принято
     uint32_t    fsWritten;       // сколько littlefs байт принято
     uint32_t    fwCalcCrc;       // вычисленный CRC firmware
@@ -86,6 +105,39 @@ struct UploadState {
     char        errMsg[80];
 };
 static UploadState s_up = {};
+static mbedtls_sha256_context s_sha;   // хэш текущей части (прошивка, затем FS), формат 2
+
+// Хэш части: начать / дописать / сверить с заголовком (и освободить контекст).
+static void shaBegin() {
+    mbedtls_sha256_init(&s_sha);
+    mbedtls_sha256_starts_ret(&s_sha, 0);
+}
+static bool shaMatches(const uint8_t* want) {
+    uint8_t got[32];
+    const bool ok = mbedtls_sha256_finish_ret(&s_sha, got) == 0 && memcmp(got, want, 32) == 0;
+    mbedtls_sha256_free(&s_sha);
+    return ok;
+}
+
+#ifdef OTA_PUBKEY_PEM
+// Подпись ECDSA P-256 / SHA-256 первых GHFW_SIGNED_PART байт заголовка.
+static bool signatureOk(const uint8_t* hdr) {
+    const uint16_t sigLen = (uint16_t)(hdr[96] | (hdr[97] << 8));
+    if (sigLen == 0 || sigLen > GHFW_SIG_MAX) return false;
+    uint8_t h[32];
+    if (mbedtls_sha256_ret(hdr, GHFW_SIGNED_PART, h, 0) != 0) return false;
+    static const char PEM[] = OTA_PUBKEY_PEM;
+    mbedtls_pk_context pk;
+    mbedtls_pk_init(&pk);
+    const bool ok =
+           mbedtls_pk_parse_public_key(&pk, (const unsigned char*)PEM, sizeof(PEM)) == 0
+        && mbedtls_pk_can_do(&pk, MBEDTLS_PK_ECKEY)
+        && mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, h, sizeof(h),
+                             hdr + GHFW_SIG_OFF, sigLen) == 0;
+    mbedtls_pk_free(&pk);
+    return ok;
+}
+#endif
 
 // ═══════════════════════════════════════════════════════════════════
 //  CRC32 (IEEE 802.3)
@@ -201,27 +253,48 @@ static void processBytes(const uint8_t* data, size_t len) {
 
     size_t pos = 0;
 
-    // ── Phase 1: собираем заголовок 32 байта ─────────────────────
+    // ── Phase 1: собираем заголовок (32 байта, формат 2 — 176) ────
     if (s_up.phase == UP_HEADER) {
-        size_t need = sizeof(GhfwHeader) - s_up.hdrFilled;
-        size_t take = (len < need) ? len : need;
-        memcpy(&s_up.hdrBuf[s_up.hdrFilled], data, take);
-        s_up.hdrFilled += take;
-        pos += take;
+        for (;;) {
+            size_t need = s_up.hdrNeed - s_up.hdrFilled;
+            size_t take = (len - pos < need) ? (len - pos) : need;
+            memcpy(&s_up.hdrBuf[s_up.hdrFilled], data + pos, take);
+            s_up.hdrFilled += take;
+            pos += take;
 
-        if (s_up.hdrFilled < sizeof(GhfwHeader)) return;   // ещё не весь
+            if (s_up.hdrFilled < s_up.hdrNeed) return;   // ещё не весь
 
-        // Заголовок собран — проверяем
-        memcpy(&s_up.hdr, s_up.hdrBuf, sizeof(GhfwHeader));
+            if (s_up.hdrNeed == GHFW_HDR_V1) {
+                memcpy(&s_up.hdr, s_up.hdrBuf, sizeof(GhfwHeader));
+                if (memcmp(s_up.hdr.magic, "GHFW", 4) != 0) {
+                    setError("Invalid magic (not a greenhouse_vX.X.bin)");
+                    return;
+                }
+                if (s_up.hdr.formatVer == 2) {      // дочитать хэши и подпись
+                    s_up.hdrNeed = GHFW_HDR_V2;
+                    continue;
+                }
+                if (s_up.hdr.formatVer != 1) {
+                    setError("Unsupported format version");
+                    return;
+                }
+            }
+            break;
+        }
 
-        if (memcmp(s_up.hdr.magic, "GHFW", 4) != 0) {
-            setError("Invalid magic (not a greenhouse_vX.X.bin)");
+#ifdef OTA_PUBKEY_PEM
+        // Прошивка собрана с ключом: неподписанный контейнер не принимаем.
+        if (s_up.hdr.formatVer != 2) {
+            setError("Unsigned container rejected: signed updates only");
             return;
         }
-        if (s_up.hdr.formatVer != 1) {
-            setError("Unsupported format version");
+        if (!signatureOk(s_up.hdrBuf)) {
+            setError("Container signature is invalid");
             return;
         }
+        Serial.println(F("[OTA] Container signature OK"));
+#endif
+        s_up.hashed = (s_up.hdr.formatVer == 2);
         // Sanity на размеры
         if (s_up.hdr.fwSize < 100000 || s_up.hdr.fwSize > 1769472) {  // app0=1728KB
             setError("Firmware size out of range");
@@ -252,6 +325,7 @@ static void processBytes(const uint8_t* data, size_t len) {
         s_up.phase     = UP_FW;
         s_up.fwWritten = 0;
         s_up.fwCalcCrc = 0;
+        if (s_up.hashed) shaBegin();
         Serial.println(F("[OTA] Phase: writing FIRMWARE"));
     }
 
@@ -269,6 +343,7 @@ static void processBytes(const uint8_t* data, size_t len) {
                 return;
             }
             s_up.fwCalcCrc = crc32Update(s_up.fwCalcCrc, data + pos, take);
+            if (s_up.hashed) mbedtls_sha256_update_ret(&s_sha, data + pos, take);
             s_up.fwWritten += take;
             pos += take;
         }
@@ -281,6 +356,12 @@ static void processBytes(const uint8_t* data, size_t len) {
                 snprintf(buf, sizeof(buf), "FW CRC mismatch: got %08X, expected %08X",
                     (unsigned)s_up.fwCalcCrc, (unsigned)s_up.hdr.fwCrc);
                 setError(buf);
+                return;
+            }
+            // Формат 2: прошивка обязана совпасть с подписанным хэшем — до
+            // Update.end(), который переключает загрузку на новый раздел.
+            if (s_up.hashed && !shaMatches(s_up.hdrBuf + GHFW_HDR_V1)) {
+                setError("FW hash does not match the signed header");
                 return;
             }
             // Завершаем firmware update (без перезагрузки)
@@ -306,6 +387,7 @@ static void processBytes(const uint8_t* data, size_t len) {
             s_up.phase     = UP_FS;
             s_up.fsWritten = 0;
             s_up.fsCalcCrc = 0;
+            if (s_up.hashed) shaBegin();
             Serial.println(F("[OTA] Phase: writing LITTLEFS"));
         }
     }
@@ -324,6 +406,7 @@ static void processBytes(const uint8_t* data, size_t len) {
                 return;
             }
             s_up.fsCalcCrc = crc32Update(s_up.fsCalcCrc, data + pos, take);
+            if (s_up.hashed) mbedtls_sha256_update_ret(&s_sha, data + pos, take);
             s_up.fsWritten += take;
             pos += take;
         }
@@ -334,6 +417,10 @@ static void processBytes(const uint8_t* data, size_t len) {
                 snprintf(buf, sizeof(buf), "FS CRC mismatch: got %08X, expected %08X",
                     (unsigned)s_up.fsCalcCrc, (unsigned)s_up.hdr.fsCrc);
                 setError(buf);
+                return;
+            }
+            if (s_up.hashed && !shaMatches(s_up.hdrBuf + GHFW_HDR_V1 + 32)) {
+                setError("FS hash does not match the signed header");
                 return;
             }
             if (!Update.end(true)) {
@@ -354,10 +441,22 @@ static void processBytes(const uint8_t* data, size_t len) {
 // ═══════════════════════════════════════════════════════════════════
 //  WEB-СЕРВЕР: ОБРАБОТКА UPLOAD
 // ═══════════════════════════════════════════════════════════════════
+// Сессия (Bearer) или Basic, как у остального API. Раньше пустые логин и
+// пароль означали «пускать без пароля» — обновление прошивки так открываться
+// не должно ни при каких настройках. С заводскими admin/admin обновление
+// не принимается: иначе любой в сети заливал бы свою прошивку по паролю
+// из инструкции.
 static bool otaCheckAuth(AsyncWebServerRequest* req) {
-    const NetCache& nc = NetMgr::cache();
-    if (nc.webUser[0] == 0 && nc.webPass[0] == 0) return true;
-    if (req->authenticate(nc.webUser, nc.webPass)) return true;
+    if (AuthSess::authorized(req)) {
+        if (!NetMgr::credsAreDefault()) return true;
+        // Исключение — страница восстановления (панели на флеше нет): сменить
+        // пароль там негде, а без загрузки контейнера панель не вернуть.
+        // Пустую файловую систему снаружи не устроить.
+        if (!LittleFS.exists("/index.html")) return true;
+        Serial.println(F("[OTA] Rejected: default credentials still in use"));
+        req->send(403, "application/json", "{\"ok\":false,\"error\":\"default_credentials\"}");
+        return false;
+    }
     // v6.1: 401 без WWW-Authenticate — как и в requireAuth().
     // Загрузку прошивки инициирует панель через XHR и сама подписывает
     // запрос, поэтому системное окно ввода пароля только мешало бы
@@ -415,7 +514,9 @@ static void handleUploadChunk(AsyncWebServerRequest* req,
 
         // Сброс состояния
         s_up.phase     = UP_HEADER;
+        s_up.hdrNeed   = GHFW_HDR_V1;
         s_up.hdrFilled = 0;
+        s_up.hashed    = false;
         s_up.errMsg[0] = 0;
         memset(&s_up.hdr, 0, sizeof(s_up.hdr));
     }
@@ -486,24 +587,21 @@ void setupArduinoOTA() {
         mac[3], mac[4], mac[5]);
     ArduinoOTA.setHostname(hostname);
 
-    // v6.1: ПАРОЛЬ НА СЕТЕВУЮ ПРОШИВКУ.
-    // Раньше setPassword() не вызывался вообще — но канал ArduinoOTA был
-    // сломан (handle() никогда не выполнялся), и дыра не проявлялась.
-    // После починки канала он заработал, и без пароля любой в локальной
-    // сети смог бы залить в теплицу произвольную прошивку.
-    //
-    // Пароль берём тот же, что у веб-панели: одна учётка вместо двух,
-    // и секрет не хранится ни в исходниках, ни в platformio.ini.
-    // В окружении [env:ota] его надо передать как --auth=<пароль>.
+    // v6.3: У ArduinoOTA СВОЙ пароль, и без него канал не запускается вовсе.
+    // Раньше это был пароль панели: кража сессии панели (XSS) или подсмотренный
+    // Basic-заголовок означали право залить произвольную прошивку мимо проверки
+    // подписи контейнера. Канал нужен только при разработке (PlatformIO,
+    // [env:ota] с --auth=<пароль>), поэтому по умолчанию выключен; пароль
+    // задаётся в «Настройки → Доступ» и действует после перезагрузки.
     const NetCache& nc = NetMgr::cache();
-    if (nc.webPass[0] != '\0') {
-        ArduinoOTA.setPassword(nc.webPass);
-        Serial.println(F("[OTA] ArduinoOTA: password set (same as web panel password)"));
-    } else {
-        Serial.println(F("[OTA] !!! WARNING: web panel password is empty -"));
-        Serial.println(F("[OTA] !!! network flashing is OPEN to everyone on the LAN."));
-        Serial.println(F("[OTA] !!! Set a password under Settings -> Access."));
+    if (nc.otaPass[0] == '\0') {
+        s_arduinoOtaOn = false;
+        Serial.println(F("[OTA] ArduinoOTA disabled (no OTA password set)"));
+        return;
     }
+    s_arduinoOtaOn = true;
+    ArduinoOTA.setPassword(nc.otaPass);
+    Serial.println(F("[OTA] ArduinoOTA: enabled with its own password"));
 
     ArduinoOTA.onStart([]() {
         bool isFs = (ArduinoOTA.getCommand() == U_SPIFFS);
@@ -547,9 +645,11 @@ void OtaMgr::attachTo(AsyncWebServer& server) {
     );
     Serial.println(F("[OTA] /update endpoint registered (greenhouse_vX.Y.bin format)"));
 
-    // Запуск ArduinoOTA здесь
-    ArduinoOTA.begin();
-    Serial.printf("[OTA] ArduinoOTA started (mDNS: %s.local)\n", ArduinoOTA.getHostname().c_str());
+    // Запуск ArduinoOTA здесь — только если задан его собственный пароль.
+    if (s_arduinoOtaOn) {
+        ArduinoOTA.begin();
+        Serial.printf("[OTA] ArduinoOTA started (mDNS: %s.local)\n", ArduinoOTA.getHostname().c_str());
+    }
 }
 
 void OtaMgr::loop() {
@@ -558,7 +658,7 @@ void OtaMgr::loop() {
     // handle(). Замкнутый круг — ArduinoOTA никогда не стартовал, обновление из
     // PlatformIO по сети было нерабочим. handle() обязан вызываться всегда:
     // он слушает mDNS/UDP и сам решает, началась ли сессия.
-    ArduinoOTA.handle();
+    if (s_arduinoOtaOn) ArduinoOTA.handle();
     // Перезагрузка после успешного обновления
     if (s_rebootPending.load() && steadyMs() >= s_rebootAtMs) {
         s_rebootPending.store(false);

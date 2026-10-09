@@ -55,6 +55,13 @@ def read_version():
     return major, minor
 
 
+def sign_key_path():
+    """Закрытый ключ подписи вне репозитория (см. tools/ota_pubkey.py)."""
+    p = os.environ.get("GH_OTA_KEY") or os.path.join(
+        os.path.expanduser("~"), ".greenhouse", "ota_signing_key.pem")
+    return p if os.path.isfile(p) else None
+
+
 def find_fs_image():
     """Образ файловой системы, если он уже собран."""
     for name in ("littlefs.bin", "spiffs.bin"):
@@ -87,15 +94,21 @@ def build_container(source, target, env):  # noqa: ARG001 — сигнатура
     out_name = "greenhouse_v%d.%d.bin" % (major, minor)
     out_path = os.path.join(PROJECT_DIR, out_name)
 
-    result = subprocess.run(
-        [sys.executable, PACKER,
-         "--fw", firmware,
-         "--fs", fs_image,
-         "--major", str(major),
-         "--minor", str(minor),
-         "--out", out_path],
-        capture_output=True, text=True,
-    )
+    cmd = [sys.executable, PACKER,
+           "--fw", firmware,
+           "--fs", fs_image,
+           "--major", str(major),
+           "--minor", str(minor),
+           "--out", out_path]
+    # Подписанный контейнер (формат 2), если есть ключ (тот же, что встраивает
+    # tools/ota_pubkey.py). GH_CONTAINER_V1=1 — неподписанный формат 1: нужен один
+    # раз, чтобы перевести устройство с прошивки, которая формат 2 ещё не знает.
+    key = sign_key_path()
+    if key and os.environ.get("GH_CONTAINER_V1") != "1":
+        cmd += ["--sign-key", key]
+    elif key:
+        print("[container] GH_CONTAINER_V1=1 — собираю НЕПОДПИСАННЫЙ контейнер формата 1")
+    result = subprocess.run(cmd, capture_output=True, text=True)
 
     print("")
     if result.returncode == 0:

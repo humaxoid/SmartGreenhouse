@@ -15,6 +15,7 @@
 #include "mqtt_manager.h"
 #include "ws_handler.h"
 #include "ota_manager.h"
+#include "auth_session.h"
 #include "config.h"
 #include <Arduino.h>
 #include <WiFi.h>
@@ -41,8 +42,7 @@ static volatile uint64_t s_rebootAtMs    = 0;
 // какой запрос вызывает системное окно — в логе браузера видно только
 // его результат, а не причину на стороне контроллера.
 static bool requireAuth(AsyncWebServerRequest* req) {
-    const NetCache& nc = NetMgr::cache();
-    if (req->authenticate(nc.webUser, nc.webPass)) return true;
+    if (AuthSess::authorized(req)) return true;   // Bearer-сессия или Basic
 
     const bool hasHdr = req->hasHeader("Authorization");
     if (hasHdr) EventLog::authFail();   // неверный пароль, а не просто «ещё не входили»
@@ -71,6 +71,15 @@ static bool requireAuth(AsyncWebServerRequest* req) {
     // вызов Digest-аутентификации, хотя панель подписывает запросы Basic.
     req->send(401, "application/json", "{\"error\":\"unauthorized\"}");
     return false;
+}
+
+// Пока действуют заводские admin/admin, изменяющие запросы отклоняются — кроме
+// смены пароля и темы оформления. Иначе любой в сети (или у аварийной точки
+// доступа) заходил бы с паролем из инструкции и заливал свою прошивку.
+static bool denyIfDefaultCreds(AsyncWebServerRequest* req) {
+    if (!NetMgr::credsAreDefault()) return false;
+    req->send(403, "application/json", "{\"ok\":false,\"error\":\"default_credentials\"}");
+    return true;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -201,6 +210,10 @@ static void handleGetSettings(AsyncWebServerRequest* req) {
     ui["lang"]  = g_settings.uiLang;
 
     doc["fwVersion"] = FW_VERSION;
+    // Заводские admin/admin: панель показывает обязательную смену пароля,
+    // а всё изменяющее до неё отклоняется (см. denyIfDefaultCreds).
+    doc["credsDefault"] = NetMgr::credsAreDefault();
+    doc["otaPassSet"]   = NetMgr::cache().otaPass[0] != '\0';   // сам пароль не отдаём
     sendJson(req, doc);
 }
 
@@ -222,6 +235,7 @@ static void handleGetNetwork(AsyncWebServerRequest* req) {
 // ── POST /api/network ─────────────────────────────────────────────
 static void handlePostNetwork(AsyncWebServerRequest* req, JsonVariant& json) {
     if (!requireAuth(req)) return;
+    if (denyIfDefaultCreds(req)) return;
     JsonObject body = json.as<JsonObject>();
     NetCache nc = NetMgr::cache();
     bool savePass = false;
@@ -283,6 +297,7 @@ static void handleGetTelemetry(AsyncWebServerRequest* req) {
 
 static void handlePostTelemetry(AsyncWebServerRequest* req, JsonVariant& json) {
     if (!requireAuth(req)) return;
+    if (denyIfDefaultCreds(req)) return;
     JsonObject body = json.as<JsonObject>();
     if (!body["enabled"].is<bool>()) { sendAck(req, false, "enabled (bool) required", 400); return; }
     if (!Telemetry::isAvailable()) { sendAck(req, false, "not configured in this build", 409); return; }
@@ -307,6 +322,7 @@ static void handleGetMqtt(AsyncWebServerRequest* req) {
 // ── POST /api/mqtt ────────────────────────────────────────────────
 static void handlePostMqtt(AsyncWebServerRequest* req, JsonVariant& json) {
     if (!requireAuth(req)) return;
+    if (denyIfDefaultCreds(req)) return;
     JsonObject body = json.as<JsonObject>();
 
     // Сначала проверяем ВСЁ, и только потом пишем: раньше поля писались по
@@ -341,19 +357,79 @@ static void handlePostMqtt(AsyncWebServerRequest* req, JsonVariant& json) {
     Serial.println(F("[HTTP] MQTT settings saved"));
 }
 
+// ── POST /api/login ───────────────────────────────────────────────
+// Единственное место, где панель отдаёт пароль: Basic → токен сессии.
+// Bearer здесь не принимается — сессию из сессии не выписываем.
+static void handleLogin(AsyncWebServerRequest* req) {
+    const NetCache& nc = NetMgr::cache();
+    if (!req->authenticate(nc.webUser, nc.webPass)) {
+        if (req->hasHeader("Authorization")) EventLog::authFail();
+        Serial.printf("[AUTH] 401 login — %s\n",
+            req->hasHeader("Authorization") ? "credentials rejected" : "no Authorization header");
+        req->send(401, "application/json", "{\"error\":\"unauthorized\"}");
+        return;
+    }
+    char tok[AuthSess::TOKEN_BUF];
+    if (!AuthSess::create(tok, sizeof(tok))) { sendAck(req, false, "session", 500); return; }
+    JsonDocument doc;
+    doc["ok"]           = true;
+    doc["token"]        = tok;
+    doc["credsDefault"] = NetMgr::credsAreDefault();
+    sendJson(req, doc);
+}
+
+// ── POST /api/logout ──────────────────────────────────────────────
+static void handleLogout(AsyncWebServerRequest* req) {
+    const char* t = AuthSess::bearerOf(req);
+    if (t) AuthSess::revoke(t);
+    sendAck(req, true);
+}
+
 // ── POST /api/webcreds ────────────────────────────────────────────
+// Новый пароль — от 8 символов и не заводской admin/admin (пароли от 4
+// символов, заданные раньше, продолжают работать до смены). Смена сбрасывает
+// все сессии: украденный токен после неё бесполезен. Тот, кто сменил пароль,
+// получает в ответе новый токен и остаётся в панели.
 static void handleWebCreds(AsyncWebServerRequest* req, JsonVariant& json) {
     if (!requireAuth(req)) return;
     JsonObject body = json.as<JsonObject>();
     const char* user = body["user"] | "";
     const char* pass = body["pass"] | "";
     if (strlen(user) < 1 || strlen(user) > 31) { sendAck(req, false, "user length 1-31", 400); return; }
-    if (strlen(pass) < 4 || strlen(pass) > 31) { sendAck(req, false, "pass length 4-31", 400); return; }
+    if (strlen(pass) < 8 || strlen(pass) > 31) { sendAck(req, false, "pass length 8-31", 400); return; }
+    if (strcmp(user, WEB_DEFAULT_USER) == 0 && strcmp(pass, WEB_DEFAULT_PASS) == 0) {
+        sendAck(req, false, "default credentials not allowed", 400); return;
+    }
     if (!NetMgr::saveWebCreds(user, pass)) {
         sendAck(req, false, "credentials not saved (NVS)", 500);
         return;
     }
-    Serial.printf("[HTTP] Web credentials changed: %s\n", user);
+    AuthSess::revokeAll();
+    char tok[AuthSess::TOKEN_BUF];
+    const bool haveTok = AuthSess::create(tok, sizeof(tok));
+    Serial.printf("[HTTP] Web credentials changed: %s (all sessions revoked)\n", user);
+    EventLog::add(EV_SETTINGS, EVS_CREDS);
+    JsonDocument doc;
+    doc["ok"] = true;
+    if (haveTok) doc["token"] = tok;
+    sendJson(req, doc);
+}
+
+// ── POST /api/otapass ─────────────────────────────────────────────
+// Body: { "pass": "..." } — пароль ArduinoOTA (прошивка из PlatformIO по сети).
+// Пустой — канал выключен. Действует после перезагрузки.
+static void handleOtaPass(AsyncWebServerRequest* req, JsonVariant& json) {
+    if (!requireAuth(req)) return;
+    if (denyIfDefaultCreds(req)) return;
+    JsonObject body = json.as<JsonObject>();
+    if (!body["pass"].is<const char*>()) { sendAck(req, false, "pass (string) required", 400); return; }
+    const char* p = body["pass"];
+    const size_t n = strlen(p);
+    if (n != 0 && (n < 8 || n > 31)) { sendAck(req, false, "pass length 8-31 or empty", 400); return; }
+    if (n != 0 && strcmp(p, NetMgr::cache().webPass) == 0) {
+        sendAck(req, false, "must differ from the panel password", 400); return;
+    }
+    if (!NetMgr::saveOtaPass(p)) { sendAck(req, false, "not saved (NVS)", 500); return; }
     EventLog::add(EV_SETTINGS, EVS_CREDS);
     sendAck(req, true);
 }
@@ -362,6 +438,7 @@ static void handleWebCreds(AsyncWebServerRequest* req, JsonVariant& json) {
 // Body: { "server": "pool.ntp.org", "tz": "MSK-3", "updateHrs": 4 }
 static void handlePostNtp(AsyncWebServerRequest* req, JsonVariant& json) {
     if (!requireAuth(req)) return;
+    if (denyIfDefaultCreds(req)) return;
     JsonObject body = json.as<JsonObject>();
     bool tzChanged = false;
     {   // лок — только на правку структуры; запись якорей во флеш ниже, вне его
@@ -457,6 +534,7 @@ static void handleWifiScan(AsyncWebServerRequest* req) {
 // ── POST /api/factory_reset ───────────────────────────────────────
 static void handleFactoryReset(AsyncWebServerRequest* req) {
     if (!requireAuth(req)) return;
+    if (denyIfDefaultCreds(req)) return;
     Serial.println(F("[HTTP] FACTORY RESET requested"));
     settingsReset();
     EventLog::add(EV_SETTINGS, EVS_FACTORY);
@@ -468,6 +546,7 @@ static void handleFactoryReset(AsyncWebServerRequest* req) {
 // ── POST /api/reset_wifi ──────────────────────────────────────────
 static void handleResetWifi(AsyncWebServerRequest* req) {
     if (!requireAuth(req)) return;
+    if (denyIfDefaultCreds(req)) return;
     Serial.println(F("[HTTP] WiFi credentials reset requested"));
     // v6.1: проверять результат по NetMgr::hasCredentials() нельзя — она
     // смотрит в кэш RAM, а он обновляется независимо от того, дошла ли
@@ -489,6 +568,7 @@ static void handleResetWifi(AsyncWebServerRequest* req) {
 // ── POST /api/reboot ──────────────────────────────────────────────
 static void handleReboot(AsyncWebServerRequest* req) {
     if (!requireAuth(req)) return;
+    if (denyIfDefaultCreds(req)) return;
     Serial.println(F("[HTTP] Manual reboot requested"));
     EventLog::add(EV_REBOOT, 0);
     sendAck(req, true);
@@ -551,20 +631,20 @@ void WebRoutes::init() {
             [fn](AsyncWebServerRequest* r, JsonVariant& j){ fn(r, j); });
         h->setMethod(HTTP_POST);
         h->setMaxContentLength(2048);
-        h->setFilter([](AsyncWebServerRequest* r) {
-            const NetCache& nc = NetMgr::cache();
-            return r->authenticate(nc.webUser, nc.webPass);
-        });
+        h->setFilter([](AsyncWebServerRequest* r) { return AuthSess::authorized(r); });
         s_server.addHandler(h);
     };
     addJsonPost("/api/network", handlePostNetwork);
     addJsonPost("/api/mqtt",    handlePostMqtt);
     addJsonPost("/api/webcreds",handleWebCreds);
+    addJsonPost("/api/otapass", handleOtaPass);
     addJsonPost("/api/ntp",     handlePostNtp);
     addJsonPost("/api/ui",      handlePostUi);
     addJsonPost("/api/telemetry", handlePostTelemetry);
 
     // POST без body
+    s_server.on("/api/login",         HTTP_POST, handleLogin);
+    s_server.on("/api/logout",        HTTP_POST, handleLogout);
     s_server.on("/api/factory_reset", HTTP_POST, handleFactoryReset);
     s_server.on("/api/reset_wifi",    HTTP_POST, handleResetWifi);
     s_server.on("/api/reboot",        HTTP_POST, handleReboot);
@@ -579,8 +659,7 @@ void WebRoutes::init() {
             // Запрос без верного пароля, отсеянный фильтром JSON-обработчиков,
             // тоже попадает сюда: отвечаем 401, а не 404, чтобы панель
             // отличала «нет доступа» от «нет такого маршрута».
-            const NetCache& nc = NetMgr::cache();
-            if (!req->authenticate(nc.webUser, nc.webPass)) {
+            if (!AuthSess::authorized(req)) {
                 if (req->hasHeader("Authorization")) EventLog::authFail();
                 req->send(401, "application/json", "{\"error\":\"unauthorized\"}");
                 return;
