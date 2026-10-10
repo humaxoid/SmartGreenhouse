@@ -243,7 +243,6 @@ static void handleGetNetwork(AsyncWebServerRequest* req) {
 // ── POST /api/network ─────────────────────────────────────────────
 static void handlePostNetwork(AsyncWebServerRequest* req, JsonVariant& json) {
     if (!requireAuth(req)) return;
-    if (denyIfDefaultCreds(req)) return;
     JsonObject body = json.as<JsonObject>();
     NetCache nc = NetMgr::cache();
     bool savePass = false;
@@ -305,7 +304,6 @@ static void handleGetTelemetry(AsyncWebServerRequest* req) {
 
 static void handlePostTelemetry(AsyncWebServerRequest* req, JsonVariant& json) {
     if (!requireAuth(req)) return;
-    if (denyIfDefaultCreds(req)) return;
     JsonObject body = json.as<JsonObject>();
     if (!body["enabled"].is<bool>()) { sendAck(req, false, "enabled (bool) required", 400); return; }
     if (!Telemetry::isAvailable()) { sendAck(req, false, "not configured in this build", 409); return; }
@@ -330,7 +328,6 @@ static void handleGetMqtt(AsyncWebServerRequest* req) {
 // ── POST /api/mqtt ────────────────────────────────────────────────
 static void handlePostMqtt(AsyncWebServerRequest* req, JsonVariant& json) {
     if (!requireAuth(req)) return;
-    if (denyIfDefaultCreds(req)) return;
     JsonObject body = json.as<JsonObject>();
 
     // Сначала проверяем ВСЁ, и только потом пишем: раньше поля писались по
@@ -441,7 +438,6 @@ static void handleWebCreds(AsyncWebServerRequest* req, JsonVariant& json) {
 // Пустой — канал выключен. Действует после перезагрузки.
 static void handleOtaPass(AsyncWebServerRequest* req, JsonVariant& json) {
     if (!requireAuth(req)) return;
-    if (denyIfDefaultCreds(req)) return;
     JsonObject body = json.as<JsonObject>();
     if (!body["pass"].is<const char*>()) { sendAck(req, false, "pass (string) required", 400); return; }
     const char* p = body["pass"];
@@ -459,7 +455,6 @@ static void handleOtaPass(AsyncWebServerRequest* req, JsonVariant& json) {
 // Body: { "server": "pool.ntp.org", "tz": "MSK-3", "updateHrs": 4 }
 static void handlePostNtp(AsyncWebServerRequest* req, JsonVariant& json) {
     if (!requireAuth(req)) return;
-    if (denyIfDefaultCreds(req)) return;
     JsonObject body = json.as<JsonObject>();
     bool tzChanged = false;
     {   // лок — только на правку структуры; запись якорей во флеш ниже, вне его
@@ -555,7 +550,6 @@ static void handleWifiScan(AsyncWebServerRequest* req) {
 // ── POST /api/factory_reset ───────────────────────────────────────
 static void handleFactoryReset(AsyncWebServerRequest* req) {
     if (!requireAuth(req)) return;
-    if (denyIfDefaultCreds(req)) return;
     Serial.println(F("[HTTP] FACTORY RESET requested"));
     settingsReset();
     EventLog::add(EV_SETTINGS, EVS_FACTORY);
@@ -567,7 +561,6 @@ static void handleFactoryReset(AsyncWebServerRequest* req) {
 // ── POST /api/reset_wifi ──────────────────────────────────────────
 static void handleResetWifi(AsyncWebServerRequest* req) {
     if (!requireAuth(req)) return;
-    if (denyIfDefaultCreds(req)) return;
     Serial.println(F("[HTTP] WiFi credentials reset requested"));
     // v6.1: проверять результат по NetMgr::hasCredentials() нельзя — она
     // смотрит в кэш RAM, а он обновляется независимо от того, дошла ли
@@ -589,7 +582,6 @@ static void handleResetWifi(AsyncWebServerRequest* req) {
 // ── POST /api/reboot ──────────────────────────────────────────────
 static void handleReboot(AsyncWebServerRequest* req) {
     if (!requireAuth(req)) return;
-    if (denyIfDefaultCreds(req)) return;
     Serial.println(F("[HTTP] Manual reboot requested"));
     EventLog::add(EV_REBOOT, 0);
     sendAck(req, true);
@@ -647,28 +639,44 @@ void WebRoutes::init() {
     //     остальные до выделения буфера не доходят (см. onNotFound ниже);
     //   • тело ограничено 2 КБ (самый крупный запрос — /api/network ~400 Б).
     // requireAuth() внутри обработчиков оставлена как вторая линия.
-    auto addJsonPost = [](const char* uri, void (*fn)(AsyncWebServerRequest*, JsonVariant&)) {
+    //
+    // Запрет при заводских admin/admin (denyIfDefaultCreds) стоит здесь, при
+    // регистрации, а не в каждом обработчике: новый POST-маршрут закрыт по
+    // умолчанию. Исключения перечислены явно — ALLOW_DEFAULT.
+    constexpr bool ALLOW_DEFAULT = true;
+    auto addJsonPost = [](const char* uri, void (*fn)(AsyncWebServerRequest*, JsonVariant&),
+                          bool allowDefault = false) {
         auto* h = new AsyncCallbackJsonWebHandler(uri,
-            [fn](AsyncWebServerRequest* r, JsonVariant& j){ fn(r, j); });
+            [fn, allowDefault](AsyncWebServerRequest* r, JsonVariant& j){
+                if (!allowDefault && denyIfDefaultCreds(r)) return;   // фильтр уже проверил пароль
+                fn(r, j);
+            });
         h->setMethod(HTTP_POST);
         h->setMaxContentLength(2048);
         h->setFilter([](AsyncWebServerRequest* r) { return AuthSess::authorized(r); });
         s_server.addHandler(h);
     };
+    auto addPost = [](const char* uri, void (*fn)(AsyncWebServerRequest*), bool allowDefault = false) {
+        s_server.on(uri, HTTP_POST, [fn, allowDefault](AsyncWebServerRequest* r) {
+            // Без пароля — пусть ответит сам обработчик (401 и учёт попытки).
+            if (!allowDefault && AuthSess::authorized(r) && denyIfDefaultCreds(r)) return;
+            fn(r);
+        });
+    };
     addJsonPost("/api/network", handlePostNetwork);
     addJsonPost("/api/mqtt",    handlePostMqtt);
-    addJsonPost("/api/webcreds",handleWebCreds);
+    addJsonPost("/api/webcreds",handleWebCreds, ALLOW_DEFAULT);   // смена заводского пароля
     addJsonPost("/api/otapass", handleOtaPass);
     addJsonPost("/api/ntp",     handlePostNtp);
-    addJsonPost("/api/ui",      handlePostUi);
+    addJsonPost("/api/ui",      handlePostUi,   ALLOW_DEFAULT);   // тема и язык
     addJsonPost("/api/telemetry", handlePostTelemetry);
 
     // POST без body
-    s_server.on("/api/login",         HTTP_POST, handleLogin);
-    s_server.on("/api/logout",        HTTP_POST, handleLogout);
-    s_server.on("/api/factory_reset", HTTP_POST, handleFactoryReset);
-    s_server.on("/api/reset_wifi",    HTTP_POST, handleResetWifi);
-    s_server.on("/api/reboot",        HTTP_POST, handleReboot);
+    addPost("/api/login",         handleLogin,  ALLOW_DEFAULT);
+    addPost("/api/logout",        handleLogout, ALLOW_DEFAULT);
+    addPost("/api/factory_reset", handleFactoryReset);
+    addPost("/api/reset_wifi",    handleResetWifi);
+    addPost("/api/reboot",        handleReboot);
 
     // WebSocket и OTA
     WsHandler::attachTo(s_server);

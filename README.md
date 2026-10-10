@@ -609,7 +609,7 @@ the panel password.
   a warning; such firmware accepts unsigned containers too.
 - **Keep a copy of the key.** If it is lost, no signed update can be built;
   firmware with a new key can only be flashed over USB.
-- **Moving from unsigned firmware.** Firmware before 6.3 only knows the
+- **Moving from unsigned firmware.** Firmware that predates signed updates only knows the
   unsigned format. Build the first container with `GH_CONTAINER_V1=1` — it is
   unsigned, but the firmware inside already carries the key; every update
   after that is signed.
