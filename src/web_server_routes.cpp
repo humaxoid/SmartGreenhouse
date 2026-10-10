@@ -41,11 +41,19 @@ static volatile uint64_t s_rebootAtMs    = 0;
 // был ли вообще заголовок Authorization. Без этого невозможно понять,
 // какой запрос вызывает системное окно — в логе браузера видно только
 // его результат, а не причину на стороне контроллера.
+// В журнал «неудачные попытки входа» идёт только отказ Basic, то есть неверный
+// пароль. Просроченный токен сессии — не попытка входа: сессии живут в RAM, и
+// после каждой перезагрузки контроллера открытая панель шлёт несколько запросов
+// со старым токеном — журнал наполнялся бы ложными тревогами.
+static void countAuthFail(AsyncWebServerRequest* req) {
+    if (req->hasHeader("Authorization") && !AuthSess::bearerOf(req)) EventLog::authFail();
+}
+
 static bool requireAuth(AsyncWebServerRequest* req) {
     if (AuthSess::authorized(req)) return true;   // Bearer-сессия или Basic
 
     const bool hasHdr = req->hasHeader("Authorization");
-    if (hasHdr) EventLog::authFail();   // неверный пароль, а не просто «ещё не входили»
+    countAuthFail(req);
     Serial.printf("[AUTH] 401 %s %s — %s\n",
         req->methodToString(),
         req->url().c_str(),
@@ -395,6 +403,19 @@ static void handleWebCreds(AsyncWebServerRequest* req, JsonVariant& json) {
     JsonObject body = json.as<JsonObject>();
     const char* user = body["user"] | "";
     const char* pass = body["pass"] | "";
+    // Текущий пароль обязателен: иначе украденный токен сессии позволял бы
+    // сменить пароль и запереть владельца снаружи (вернуть доступ — только
+    // стиранием NVS по USB). Неверный — считается попыткой входа.
+    const char* cur  = body["curPass"] | "";
+    const char* real = NetMgr::cache().webPass;
+    const size_t curLen = strlen(cur), realLen = strlen(real);
+    uint8_t diff = (uint8_t)(curLen != realLen);
+    for (size_t i = 0; i < curLen && i < realLen; i++) diff |= (uint8_t)(cur[i] ^ real[i]);
+    if (diff) {
+        EventLog::authFail();
+        sendAck(req, false, "current password is wrong", 403);
+        return;
+    }
     if (strlen(user) < 1 || strlen(user) > 31) { sendAck(req, false, "user length 1-31", 400); return; }
     if (strlen(pass) < 8 || strlen(pass) > 31) { sendAck(req, false, "pass length 8-31", 400); return; }
     if (strcmp(user, WEB_DEFAULT_USER) == 0 && strcmp(pass, WEB_DEFAULT_PASS) == 0) {
@@ -660,7 +681,7 @@ void WebRoutes::init() {
             // тоже попадает сюда: отвечаем 401, а не 404, чтобы панель
             // отличала «нет доступа» от «нет такого маршрута».
             if (!AuthSess::authorized(req)) {
-                if (req->hasHeader("Authorization")) EventLog::authFail();
+                countAuthFail(req);
                 req->send(401, "application/json", "{\"error\":\"unauthorized\"}");
                 return;
             }

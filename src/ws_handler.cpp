@@ -924,8 +924,10 @@ static void handleMessage(AsyncWebSocketClient* client,
             sendStateTo(client);
         } else {
             Serial.printf("[WS] Client #%u auth FAILED — closing\n", client->id());
+            // Не попытка входа: токен случайный, 128 бит, и сюда приходит
+            // прежде всего старая сессия открытой панели после перезагрузки
+            // контроллера. Неверный пароль считается в POST /api/login.
             sendAck(client, "auth", false, "bad token");
-            EventLog::authFail();
             authRelease(client->id());
             client->close();
         }
