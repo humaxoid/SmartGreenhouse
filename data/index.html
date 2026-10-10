@@ -18,7 +18,7 @@
             <div class="input-box pass-wrap"><input type="password" id="loginPass" autocomplete="current-password"
                     placeholder=" "><label data-i18n="login_pass">Password</label><button type="button" class="pass-eye"
                     onclick="togglePass('loginPass')">&#128065;</button></div>
-            <div id="loginError" class="login-error" style="display:none"></div><button class="btn-login" id="btnLogin"
+            <div id="loginError" class="login-error" style="display:none"></div><button type="button" class="btn-login" id="btnLogin"
                 onclick="doLogin()" data-i18n="login_btn">Sign in</button>
         </div>
     </div>
@@ -39,12 +39,12 @@
                 href="#" id="aboutLink" data-i18n="nav_about">About</a>
             <div class="sb-bottom">
                 <div class="sb-ver"><span>v</span><span id="sbVer">—</span><span class="sb-dot">·</span><span
-                        id="sbUp">—</span></div><button class="sb-logout" id="btnLogout" onclick="doLogout()"
+                        id="sbUp">—</span></div><button type="button" class="sb-logout" id="btnLogout" onclick="doLogout()"
                     data-i18n="btn_logout">Logout</button></div>
         </nav>
         <div class="sb-overlay" id="sbOverlay" onclick="closeSidebar()"></div>
         <div class="main-wrap">
-            <header class="top-bar"><button class="hamburger" onclick="toggleSidebar()"
+            <header class="top-bar"><button type="button" class="hamburger" onclick="toggleSidebar()"
                     aria-label="Menu"><span class="hb-bar"></span><span class="hb-bar"></span><span
                         class="hb-bar"></span></button>
                 <div class="top-bar-right">
@@ -137,8 +137,8 @@
 
                     <!-- Кнопки ручного режима OPEN / CLOSE (отображаются только в ручном) -->
                     <div id="ventManualBtns" class="vent-manual-row">
-                        <button class="vent-btn vent-btn-open" id="vBtnOpen" data-i18n="btn_vent_open">OPEN</button>
-                        <button class="vent-btn vent-btn-close" id="vBtnClose" data-i18n="btn_vent_close">CLOSE</button>
+                        <button type="button" class="vent-btn vent-btn-open" id="vBtnOpen" data-i18n="btn_vent_open">OPEN</button>
+                        <button type="button" class="vent-btn vent-btn-close" id="vBtnClose" data-i18n="btn_vent_close">CLOSE</button>
                     </div>
 
                     <!-- Идёт калибровочный прогон: виден в любом режиме, его можно остановить отсюда -->
@@ -169,7 +169,7 @@
                                 <div class="countdown" id="cd0"><span id="cd0H">--</span><span
                                         class="seg-colon">:</span><span id="cd0M">--</span></div>
                             </div>
-                            <div class="manual-mode"><button class="relay-btn off" id="rBtn0"
+                            <div class="manual-mode"><button type="button" class="relay-btn off" id="rBtn0"
                                     onclick="toggleRelay(0)">OFF</button></div>
                         </div>
                         <div class="timer-box">
@@ -184,7 +184,7 @@
                                 <div class="countdown" id="cd1"><span id="cd1H">--</span><span
                                         class="seg-colon">:</span><span id="cd1M">--</span></div>
                             </div>
-                            <div class="manual-mode"><button class="relay-btn off" id="rBtn1"
+                            <div class="manual-mode"><button type="button" class="relay-btn off" id="rBtn1"
                                     onclick="toggleRelay(1)">OFF</button></div>
                         </div>
                         <div class="timer-box">
@@ -199,11 +199,11 @@
                                 <div class="countdown" id="cd2"><span id="cd2H">--</span><span
                                         class="seg-colon">:</span><span id="cd2M">--</span></div>
                             </div>
-                            <div class="manual-mode"><button class="relay-btn off" id="rBtn2"
+                            <div class="manual-mode"><button type="button" class="relay-btn off" id="rBtn2"
                                     onclick="toggleRelay(2)">OFF</button></div>
                         </div>
                     </div>
-                    <div class="auto-mode btn-center" style="display:none;margin-top:10px"><button class="btn-apply"
+                    <div class="auto-mode btn-center" style="display:none;margin-top:10px"><button type="button" class="btn-apply"
                             onclick="applyAllTimers()" style="padding:10px 32px" data-i18n="lbl_apply_irr">&#9881; Apply
                             timer settings</button></div>
                 </section>
@@ -224,7 +224,7 @@
                         <div class="auto-sum"><span id="humidSumTxt">--</span><button type="button" class="btn-cal"
                                 onclick="openCfgSheet('humid')" data-i18n="btn_configure">Configure</button></div>
                     </div>
-                    <div id="humidManual"><button class="relay-btn off" id="rBtn7" onclick="toggleRelay(7)">OFF</button>
+                    <div id="humidManual"><button type="button" class="relay-btn off" id="rBtn7" onclick="toggleRelay(7)">OFF</button>
                     </div>
                 </section>
                 <section class="card">
@@ -251,10 +251,10 @@
                             </div>
                             <div id="pumpFaultWarn"
                                 style="display:none;padding:6px 10px;border-radius:7px;background:var(--off-bg);color:var(--off-col);font-size:.86rem;margin-bottom:10px;border:1px solid var(--off-brd);">
-                                &#9888; <span data-i18n="lbl_pump_fault">Pump fault — check sensor</span><button
+                                &#9888; <span data-i18n="lbl_pump_fault">Pump fault — check sensor</span><button type="button"
                                     class="btn-cal" onclick="pumpResetFault()" style="margin-left:6px;padding:3px 8px"
                                     data-i18n="btn_reset_fault">Reset</button></div>
-                            <div id="pumpManual"><button class="relay-btn off" id="rBtn8"
+                            <div id="pumpManual"><button type="button" class="relay-btn off" id="rBtn8"
                                     onclick="toggleRelay(8)">OFF</button></div>
                         </div>
                     </div>
@@ -271,11 +271,11 @@
                                 onclick="setHistRange(24,this)" data-i18n="hist_day">Day</button><button type="button"
                                 aria-pressed="false" onclick="setHistRange(168,this)" data-i18n="hist_week">Week</button></div>
                     </div>
-                    <div class="chart-tabs"><button class="chart-tab active" onclick="showChart('temp',this)"
-                            data-i18n="tab_temp">Temperature</button><button class="chart-tab"
-                            onclick="showChart('hum',this)" data-i18n="tab_hum">Humidity</button><button
+                    <div class="chart-tabs"><button type="button" class="chart-tab active" onclick="showChart('temp',this)"
+                            data-i18n="tab_temp">Temperature</button><button type="button" class="chart-tab"
+                            onclick="showChart('hum',this)" data-i18n="tab_hum">Humidity</button><button type="button"
                             class="chart-tab" onclick="showChart('press',this)"
-                            data-i18n="tab_press">Pressure</button><button class="chart-tab"
+                            data-i18n="tab_press">Pressure</button><button type="button" class="chart-tab"
                             onclick="showChart('water',this)" data-i18n="tab_water">Water</button></div>
                     <div class="chart-canvas-wrap"><canvas id="histChart"></canvas>
                         <div id="chartEmpty" class="chart-empty" data-i18n="chart_empty">Data accumulating... (updated
@@ -316,14 +316,14 @@
             </div>
             <div class="settings-view page-view" id="pageSettings" style="display:none">
                 <div id="statusBar" class="status-bar" style="display:none"></div>
-                <div class="settings-tabs-wrap" id="setTabsWrap"><nav class="settings-tabs" id="setTabs"><button class="set-tab active" onclick="showSettingsTab('auto')"
-                        data-i18n="set_tab_auto">Automation</button><button class="set-tab" onclick="showSettingsTab('network')"
-                        data-i18n="set_tab_network">Network</button><button class="set-tab"
-                        onclick="showSettingsTab('mqtt')" data-i18n="set_tab_mqtt">MQTT</button><button class="set-tab"
-                        onclick="showSettingsTab('creds')" data-i18n="set_tab_creds">Access</button><button
-                        class="set-tab" onclick="showSettingsTab('ntp')" data-i18n="set_tab_ntp">Time</button><button
-                        class="set-tab" onclick="showSettingsTab('ui')" data-i18n="set_tab_ui">Interface</button><button
-                        class="set-tab" onclick="showSettingsTab('ota')" data-i18n="set_tab_ota">Update</button><button
+                <div class="settings-tabs-wrap" id="setTabsWrap"><nav class="settings-tabs" id="setTabs"><button type="button" class="set-tab active" onclick="showSettingsTab('auto')"
+                        data-i18n="set_tab_auto">Automation</button><button type="button" class="set-tab" onclick="showSettingsTab('network')"
+                        data-i18n="set_tab_network">Network</button><button type="button" class="set-tab"
+                        onclick="showSettingsTab('mqtt')" data-i18n="set_tab_mqtt">MQTT</button><button type="button" class="set-tab"
+                        onclick="showSettingsTab('creds')" data-i18n="set_tab_creds">Access</button><button type="button"
+                        class="set-tab" onclick="showSettingsTab('ntp')" data-i18n="set_tab_ntp">Time</button><button type="button"
+                        class="set-tab" onclick="showSettingsTab('ui')" data-i18n="set_tab_ui">Interface</button><button type="button"
+                        class="set-tab" onclick="showSettingsTab('ota')" data-i18n="set_tab_ota">Update</button><button type="button"
                         class="set-tab" onclick="showSettingsTab('system')" data-i18n="set_tab_system">System</button>
                 </nav></div>
                 <div class="card settings-card">
@@ -344,7 +344,7 @@
                             <div class="input-box"><input type="number" id="vlTravel" min="1" max="120"><label
                                     data-i18n="lbl_calib_bottom">Lower, sec</label></div>
                         </div>
-                        <div class="btn-center" style="margin-top:14px"><button class="btn-apply" onclick="applyVentAuto()"
+                        <div class="btn-center" style="margin-top:14px"><button type="button" class="btn-apply" onclick="applyVentAuto()"
                                 data-i18n="lbl_apply">Apply</button></div>
 
                         <!-- v6.1: калибровочный прогон. Гонит створку на закрытие
@@ -355,14 +355,14 @@
                         <div class="hint" style="margin-bottom:8px" data-i18n="lbl_homing_hint">Closes the sash to the limit
                             switch and resets the counter to zero. Use if the shown position no longer matches reality.</div>
                         <div class="btn-row">
-                            <button class="btn-reset" onclick="ventHome('top')" id="btnHomeTop"
+                            <button type="button" class="btn-reset" onclick="ventHome('top')" id="btnHomeTop"
                                 data-i18n="btn_home_top">Reset upper</button>
-                            <button class="btn-reset" onclick="ventHome('bottom')" id="btnHomeBottom"
+                            <button type="button" class="btn-reset" onclick="ventHome('bottom')" id="btnHomeBottom"
                                 data-i18n="btn_home_bottom">Reset lower</button>
                         </div>
                         <div id="homingStatus" style="display:none;margin-top:8px;color:var(--accent2)">
                             <span data-i18n="lbl_homing_run">Running…</span>
-                            <button class="btn-cal" onclick="ventHomeCancel()" style="margin-left:8px"
+                            <button type="button" class="btn-cal" onclick="ventHomeCancel()" style="margin-left:8px"
                                 data-i18n="btn_home_cancel">Stop</button>
                         </div>
                         </div>
@@ -375,7 +375,7 @@
                             <div class="input-box" style="flex:1"><input type="number" id="hmL" min="30" max="95"
                                     step="1"><label data-i18n="lbl_hum_on_pct">On at humidity, %</label></div>
                         </div>
-                        <div class="btn-center"><button class="btn-apply" onclick="applyHumidThresholds()"
+                        <div class="btn-center"><button type="button" class="btn-apply" onclick="applyHumidThresholds()"
                                 data-i18n="lbl_apply_hum">Apply</button></div>
                         </div>
                         <hr class="set-hr">
@@ -391,7 +391,7 @@
                             <div class="input-box"><input type="number" id="wtTm" min="1" max="120"
                                     step="1"><label data-i18n="lbl_pump_timeout">Timeout, min</label></div>
                         </div>
-                        <div class="btn-center"><button class="btn-apply" onclick="applyWaterCfg()"
+                        <div class="btn-center"><button type="button" class="btn-apply" onclick="applyWaterCfg()"
                                 data-i18n="lbl_apply_water">Apply</button></div>
                         </div>
                     </div>
@@ -403,7 +403,7 @@
                                 placeholder=" "><label data-i18n="set_wpass">Wi-Fi password (empty = keep
                                 current)</label><button type="button" class="pass-eye"
                                 onclick="togglePass('wPas')">&#128065;</button></div>
-                        <div class="btn-row"><button class="btn-reset" onclick="scanWifi()"
+                        <div class="btn-row"><button type="button" class="btn-reset" onclick="scanWifi()"
                                 data-i18n="set_wifi_scan">Scan networks</button></div>
                         <div id="wifiScanList" style="display:none;margin-top:8px;"></div>
                         <hr class="set-hr">
@@ -429,9 +429,9 @@
                                         placeholder="8.8.4.4"><label>DNS 2</label></div>
                             </div>
                         </div>
-                        <div class="btn-row"><button class="btn-apply" onclick="applyNet()"
-                                data-i18n="set_apply_net">Apply &amp; reboot</button><button class="btn-reset"
-                                onclick="loadNetSettings()" data-i18n="set_refresh">Reload</button><button
+                        <div class="btn-row"><button type="button" class="btn-apply" onclick="applyNet()"
+                                data-i18n="set_apply_net">Apply &amp; reboot</button><button type="button" class="btn-reset"
+                                onclick="loadNetSettings()" data-i18n="set_refresh">Reload</button><button type="button"
                                 class="btn-reset" onclick="resetWifi()"
                                 style="border-color:var(--off-brd);color:var(--off-col)"
                                 data-i18n="set_forget_wifi">Forget Wi-Fi</button></div>
@@ -459,9 +459,9 @@
                                 autocomplete="new-password" placeholder=" "><label data-i18n="set_mqtt_pass">MQTT
                                 password (empty = keep)</label><button type="button" class="pass-eye"
                                 onclick="togglePass('mqttPass')">&#128065;</button></div>
-                        <div class="btn-row"><button class="btn-apply" onclick="applyMqtt()"
-                                data-i18n="set_mqtt_apply">Save MQTT</button><button class="btn-reset"
-                                onclick="loadMqttSettings()" data-i18n="set_refresh">Reload</button><button
+                        <div class="btn-row"><button type="button" class="btn-apply" onclick="applyMqtt()"
+                                data-i18n="set_mqtt_apply">Save MQTT</button><button type="button" class="btn-reset"
+                                onclick="loadMqttSettings()" data-i18n="set_refresh">Reload</button><button type="button"
                                 class="btn-reset" onclick="mqttResendDiscovery()" data-i18n="set_mqtt_resend">Re-publish
                                 discovery</button></div>
                         <div id="mqttStatusDetail" style="font-size:.86rem;color:var(--text-muted);margin-top:8px;">
@@ -478,7 +478,7 @@
                         <div class="input-box pass-wrap"><input type="password" id="wbPass" autocomplete="new-password"
                                 placeholder=" "><label data-i18n="set_password">Password</label><button type="button"
                                 class="pass-eye" onclick="togglePass('wbPass')">&#128065;</button></div>
-                        <div class="btn-row"><button class="btn-apply" onclick="applyWebCreds()"
+                        <div class="btn-row"><button type="button" class="btn-apply" onclick="applyWebCreds()"
                                 data-i18n="set_save_creds">Save credentials</button></div>
                         <p class="warn-note" data-i18n="set_creds_warn">&#9888; Other open panels will need to sign in again
                         </p>
@@ -534,7 +534,7 @@
                                 <option value="12">12 h</option>
                                 <option value="24">24 h</option>
                             </select><label data-i18n="set_ntp_interval">Sync interval</label></div>
-                        <div class="btn-row" style="margin-top:12px"><button class="btn-apply" onclick="applyNtp()"
+                        <div class="btn-row" style="margin-top:12px"><button type="button" class="btn-apply" onclick="applyNtp()"
                                 data-i18n="set_ntp_apply">Save NTP</button></div>
                         <div id="ntpStatus" style="font-size:.86rem;color:var(--text-muted);margin-top:8px;"></div>
                     </div>
@@ -576,7 +576,7 @@
                         <div id="otaProgress" class="progress" style="display:none">
                             <div id="otaBar" class="progress-bar"></div><span id="otaText">0%</span>
                         </div>
-                        <div class="btn-row"><button class="btn-apply" id="btnOtaUpload" onclick="otaUpload()" disabled
+                        <div class="btn-row"><button type="button" class="btn-apply" id="btnOtaUpload" onclick="otaUpload()" disabled
                                 data-i18n="set_ota_upload">Upload</button></div>
                         <p class="hint" style="margin-top:10px;"><span data-i18n="set_ota_current">Current
                                 version:</span> <span id="fwVersion">—</span></p>
@@ -584,9 +584,9 @@
                     <div class="set-pane" data-pane="system">
                         <div class="section-title" data-i18n="set_sys_title">System operations</div>
                         <div class="btn-row" style="flex-direction:column;align-items:stretch;gap:8px;max-width:380px">
-                            <button class="btn-apply" onclick="sysReboot()" data-i18n="set_sys_reboot">Reboot
-                                ESP32</button><button class="btn-reset" onclick="sysClearHistory()"
-                                data-i18n="set_sys_clear_hist">Clear history</button><button class="btn-reset"
+                            <button type="button" class="btn-apply" onclick="sysReboot()" data-i18n="set_sys_reboot">Reboot
+                                ESP32</button><button type="button" class="btn-reset" onclick="sysClearHistory()"
+                                data-i18n="set_sys_clear_hist">Clear history</button><button type="button" class="btn-reset"
                                 style="border-color:var(--off-brd);color:var(--off-col)" onclick="sysFactoryReset()"
                                 data-i18n="set_sys_factory">Factory reset</button></div>
                         <div class="hint factory-hint" data-i18n="set_sys_factory_hint">Factory
@@ -629,7 +629,7 @@
         </div>
     </div>
     <div id="aboutModal" class="modal" role="dialog" aria-modal="true">
-        <div class="modal-box"><button class="modal-close" onclick="closeAbout()">&#10005;</button>
+        <div class="modal-box"><button type="button" class="modal-close" onclick="closeAbout()">&#10005;</button>
             <div class="modal-logo">&#11044;</div>
             <h2 data-i18n="about_title">Smart Greenhouse</h2>
             <!-- Номер версии НЕ вписывать сюда руками: он приходит от
@@ -666,7 +666,7 @@
         <div class="offline-icon">&#128268;</div>
         <div class="offline-title" data-i18n="offline_title">Controller unavailable</div>
         <div class="offline-sub" data-i18n="offline_sub">No connection to ESP32. Page loaded from cache.<br>Check
-            controller power.</div><button class="offline-btn" onclick="location.reload()"
+            controller power.</div><button type="button" class="offline-btn" onclick="location.reload()"
             data-i18n="offline_btn">&#8635; Reload page</button>
     </div>
     <div id="toastContainer" role="status" aria-live="polite"></div>
