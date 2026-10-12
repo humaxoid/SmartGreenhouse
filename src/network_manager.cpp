@@ -37,10 +37,6 @@ static std::atomic<bool> s_firstSyncFired{false};
 // v6.0 fix: флаг "пользовательский коллбэк уже вызван" — защита от двойного вызова
 static std::atomic<bool> s_userCbInvoked{false};
 
-// Повторные запуски SNTP, пока время не получено (см. taskWiFiWatchdog)
-static uint64_t s_ntpWaitSinceMs = 0;   // когда пошёл отсчёт ожидания первой синхронизации
-static uint64_t s_ntpLastKickMs  = 0;
-
 // Флаг "мы подключены к STA" (обновляется через WiFi events)
 static std::atomic<bool> s_wifiConnected{false};
 
@@ -269,27 +265,6 @@ static void taskWiFiWatchdog(void* /*param*/) {
             // Wi-Fi: там контекст event task, тяжёлые операции запрещены.
             if (s_rescueAp.load() && s_wifiConnected.load()) {
                 NetMgr::stopRescueAp();
-            }
-
-            // Время так и не пришло, а связь есть: перезапускаем SNTP.
-            // Первый запрос мог уйти раньше, чем у контроллера появился
-            // рабочий DNS, — и тогда без перезагрузки новой попытки не было
-            // до конца интервала синхронизации (по умолчанию час). Первая
-            // проверка через 45 с после появления связи, дальше раз в 60 с.
-            if (s_wifiConnected.load() && !s_timeSet.load()) {
-                const uint64_t now = steadyMs();
-                if (s_ntpWaitSinceMs == 0) s_ntpWaitSinceMs = now;
-                if (now - s_ntpWaitSinceMs >= 45000ULL && now - s_ntpLastKickMs >= 60000ULL) {
-                    s_ntpLastKickMs = now;
-                    Serial.printf("[NTP] No sync %llu s after connect (server=%s, dns=%s) — restarting SNTP\n",
-                        (unsigned long long)((now - s_ntpWaitSinceMs) / 1000ULL),
-                        g_settings.ntpServer[0] ? g_settings.ntpServer : NTP_SERVER_PRIMARY,
-                        WiFi.dnsIP(0).toString().c_str());
-                    if (sntp_enabled()) sntp_stop();
-                    sntp_init();
-                }
-            } else {
-                s_ntpWaitSinceMs = 0;
             }
         }
 
