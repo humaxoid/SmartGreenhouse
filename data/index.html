@@ -305,6 +305,12 @@
                                 type="button" aria-pressed="false" onclick="setEvFilter('sys',this)"
                                 data-i18n="ev_sys">System</button></div>
                     </div>
+                    <div class="ev-period hist-range" role="group" id="evPeriod"><button type="button"
+                            aria-pressed="false" onclick="setEvPeriod(1,this)" data-days="1"
+                            data-i18n="ev_p1">24 h</button><button type="button" aria-pressed="false"
+                            onclick="setEvPeriod(7,this)" data-days="7" data-i18n="ev_p7">7 days</button><button
+                            type="button" class="active" aria-pressed="true" onclick="setEvPeriod(30,this)"
+                            data-days="30" data-i18n="ev_p30">30 days</button></div>
                     <p class="hint ev-hint" data-i18n="ev_hint">Important and routine events.</p>
                     <div id="evList" class="ev-list"></div>
                 </section>

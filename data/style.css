@@ -252,6 +252,8 @@ touch-action:none;-webkit-touch-callout:none;
 /* v6.3: журнал событий */
 .ev-filter{flex-wrap:wrap}
 .ev-filter button{min-width:0}
+.ev-period{margin:0 0 8px}
+.ev-period button{min-width:0}
 .ev-hint{margin:2px 0 10px}
 .ev-day{margin:16px 0 6px;font-size:.86rem;font-weight:700;color:var(--accent2);text-transform:uppercase;letter-spacing:.04em}
 .ev-day:first-child{margin-top:4px}
