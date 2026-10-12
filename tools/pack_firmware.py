@@ -156,7 +156,6 @@ def main():
     # Имя выхода
     out_name = args.out or f"greenhouse_v{args.major}.{args.minor}.bin"
 
-    # Запись контейнера
     with open(out_name, "wb") as f:
         f.write(header)
         f.write(fw_data)

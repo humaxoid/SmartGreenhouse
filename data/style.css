@@ -218,7 +218,6 @@ touch-action:none;-webkit-touch-callout:none;
 .hamburger:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .hamburger .hb-bar{display:block;width:22px;height:3px;border-radius:2px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.45)}
 @media(max-width:767px){.hamburger{display:flex}}
-/* v6.3: предупреждение на время записи обновления и перезагрузки */
 .ota-warn{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:1000;width:min(560px,calc(100% - 24px));display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:10px;background:#b71c1c;color:#fff;font-weight:600;font-size:.95rem;line-height:1.35;box-shadow:0 6px 24px rgba(0,0,0,.35);animation:otaBlink 1.1s ease-in-out infinite}
 .ota-warn-ico{font-size:1.5rem;line-height:1;flex:none}
 @keyframes otaBlink{0%,100%{background:#b71c1c}50%{background:#e65100}}

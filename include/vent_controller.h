@@ -72,9 +72,7 @@ namespace VentCtrl {
     void manualSetCmd(VentManualCmd cmd, bool leased = false);
     void manualKeepAlive();
 
-    // v6.3: реле форточек обесточены снаружи (подготовка к OTA). Сообщает
     // контроллеру, чтобы его учёт движения совпал с железом; исполняется в
-    // taskCore1 при возобновлении автоматики. Позиция фиксируется по
     // моменту вызова.
     void forceStopAll();
 

@@ -1,8 +1,6 @@
 // ╔══════════════════════════════════════════════════════════════════╗
-// ║  ota_manager.cpp — OTA обновления v6.1                           ║
 // ║                                                                  ║
 // ║  v6.1 ИЗМЕНЕНИЯ:                                                ║
-// ║   • Принимаем единый файл greenhouse_vX.X.bin (контейнер).      ║
 // ║   • Контейнер содержит firmware.bin + littlefs.bin с заголовком.║
 // ║   • Заголовок: magic "GHFW" + версия + размеры + CRC32 обоих.   ║
 // ║   • Прошивка сначала шьёт LittleFS (менее критичный), потом     ║
@@ -29,7 +27,7 @@
 #include <mbedtls/sha256.h>
 #include <mbedtls/pk.h>
 #include <atomic>
-#include "ota_pubkey.h"   // генерирует tools/ota_pubkey.py: OTA_PUBKEY_PEM или ничего
+#include "ota_pubkey.h"
 
 namespace {
 
@@ -45,8 +43,8 @@ uint64_t          s_rebootAtMs = 0;
 //                   отличить обрыв соединения от обычного завершения запроса.
 std::atomic<bool> s_fsUnmounted{false};
 std::atomic<bool> s_uploadActive{false};
-bool              s_arduinoOtaIsFs = false;   // текущая сессия ArduinoOTA пишет FS
-bool              s_arduinoOtaOn   = false;   // ArduinoOTA запущен (задан свой пароль)
+bool              s_arduinoOtaIsFs = false;
+bool              s_arduinoOtaOn   = false;
 
 // ═══════════════════════════════════════════════════════════════════
 //  ФОРМАТ КОНТЕЙНЕРА (заголовок 32 байта)
@@ -70,7 +68,6 @@ static_assert(sizeof(GhfwHeader) == 32, "GhfwHeader must be exactly 32 bytes");
 // байтов 0..95, всего 176 байт (см. tools/pack_firmware.py). Подпись
 // проверяется сразу после заголовка, до первой записи во флеш; хэши —
 // перед Update.end() каждой части, то есть до переключения загрузки.
-// Прошивка, собранная с ключом (OTA_PUBKEY_PEM), принимает ТОЛЬКО формат 2.
 #define GHFW_HDR_V1       32
 #define GHFW_HDR_V2       176
 #define GHFW_SIGNED_PART  96
@@ -154,7 +151,6 @@ static uint32_t crc32Update(uint32_t crc, const uint8_t* data, size_t len) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  ПРЕДВАРИТЕЛЬНОЕ ОТКЛЮЧЕНИЕ ПЕРЕД OTA
 // ═══════════════════════════════════════════════════════════════════
 // Реле OFF, форточки в STOP, LittleFS unmount (только перед FS upd).
 static void gracefulShutdown(bool isLittleFs) {
@@ -221,7 +217,6 @@ static void setError(const char* msg) {
     if (Update.isRunning()) Update.abort();
 }
 
-// v6.3: что делать, когда обновление не удалось. Раньше флаг s_isUpdating
 // снимался только в ответе на запрос (handleUpdateFinish), а при ОБРЫВЕ
 // соединения посреди загрузки этот обработчик не вызывается вовсе: флаг
 // оставался поднятым, и taskCore1 пропускал всю автоматику до перезагрузки —
@@ -230,7 +225,6 @@ static void setError(const char* msg) {
 // Если файловая система уже размонтирована, она могла быть записана
 // частично; работать с ней нельзя, поэтому перезагружаемся: на старте
 // раздел переформатируется, а панель-восстановление (см.
-// web_server_routes.cpp) позволяет залить контейнер заново без USB.
 // Флаг s_isUpdating до перезагрузки остаётся поднятым намеренно: моторы
 // и реле уже обесточены, а HistoryLogger не должен писать в мёртвый раздел.
 static void abortFailedUpdate() {
@@ -283,7 +277,6 @@ static void processBytes(const uint8_t* data, size_t len) {
         }
 
 #ifdef OTA_PUBKEY_PEM
-        // Прошивка собрана с ключом: неподписанный контейнер не принимаем.
         if (s_up.hdr.formatVer != 2) {
             setError("Unsigned container rejected: signed updates only");
             return;
@@ -312,7 +305,7 @@ static void processBytes(const uint8_t* data, size_t len) {
         // ── Начинаем с LittleFS (менее критично — если не получится,
         //    firmware ещё не тронули) ─ ВАЖНО: на самом деле порядок
         //    в файле: firmware → littlefs. Поэтому сначала идёт FW.
-        gracefulShutdown(false);   // пока не FS-обновление
+        gracefulShutdown(false);
         esp_task_wdt_delete(NULL);
 
         if (!Update.begin(s_up.hdr.fwSize, U_FLASH)) {
@@ -442,15 +435,12 @@ static void processBytes(const uint8_t* data, size_t len) {
 //  WEB-СЕРВЕР: ОБРАБОТКА UPLOAD
 // ═══════════════════════════════════════════════════════════════════
 // Сессия (Bearer) или Basic, как у остального API. Раньше пустые логин и
-// пароль означали «пускать без пароля» — обновление прошивки так открываться
-// не должно ни при каких настройках. С заводскими admin/admin обновление
 // не принимается: иначе любой в сети заливал бы свою прошивку по паролю
 // из инструкции.
 static bool otaCheckAuth(AsyncWebServerRequest* req) {
     if (AuthSess::authorized(req)) {
         if (!NetMgr::credsAreDefault()) return true;
         // Исключение — страница восстановления (панели на флеше нет): сменить
-        // пароль там негде, а без загрузки контейнера панель не вернуть.
         // Пустую файловую систему снаружи не устроить.
         if (!LittleFS.exists("/index.html")) return true;
         Serial.println(F("[OTA] Rejected: default credentials still in use"));
@@ -460,7 +450,6 @@ static bool otaCheckAuth(AsyncWebServerRequest* req) {
     // v6.1: 401 без WWW-Authenticate — как и в requireAuth().
     // Загрузку прошивки инициирует панель через XHR и сама подписывает
     // запрос, поэтому системное окно ввода пароля только мешало бы
-    // посреди процесса обновления.
     Serial.printf("[AUTH] 401 %s %s (OTA)\n",
         req->methodToString(), req->url().c_str());
     req->send(401, "application/json", "{\"error\":\"unauthorized\"}");
@@ -575,7 +564,6 @@ static void handleUpdateFinish(AsyncWebServerRequest* req) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  ArduinoOTA (для разработки через USB/IDE)
 // ═══════════════════════════════════════════════════════════════════
 void setupArduinoOTA() {
     // v6.1: уникальный hostname на основе последних 3 байт MAC,
@@ -587,10 +575,8 @@ void setupArduinoOTA() {
         mac[3], mac[4], mac[5]);
     ArduinoOTA.setHostname(hostname);
 
-    // v6.3: У ArduinoOTA СВОЙ пароль, и без него канал не запускается вовсе.
     // Раньше это был пароль панели: кража сессии панели (XSS) или подсмотренный
     // Basic-заголовок означали право залить произвольную прошивку мимо проверки
-    // подписи контейнера. Канал нужен только при разработке (PlatformIO,
     // [env:ota] с --auth=<пароль>), поэтому по умолчанию выключен; пароль
     // задаётся в «Настройки → Доступ» и действует после перезагрузки.
     const NetCache& nc = NetMgr::cache();
@@ -614,7 +600,6 @@ void setupArduinoOTA() {
     ArduinoOTA.onEnd([]() {
         if (s_arduinoOtaIsFs) fsDirtySet(false);   // образ записан целиком
         Serial.println(F("[OTA] ArduinoOTA end"));
-        // ArduinoOTA перезагружает контроллер сам, сразу после onEnd —
         // журнал сохраняем здесь, до OtaMgr::loop дело не дойдёт.
         EventLog::add(EV_OTA, 0, 1);
         EventLog::flush();
@@ -636,7 +621,6 @@ void OtaMgr::init() {
 }
 
 void OtaMgr::attachTo(AsyncWebServer& server) {
-    // POST /update — загрузка контейнера greenhouse_vX.Y.bin
     server.on(
         "/update", HTTP_POST,
         handleUpdateFinish,             // ответ после загрузки
@@ -645,7 +629,6 @@ void OtaMgr::attachTo(AsyncWebServer& server) {
     );
     Serial.println(F("[OTA] /update endpoint registered (greenhouse_vX.Y.bin format)"));
 
-    // Запуск ArduinoOTA здесь — только если задан его собственный пароль.
     if (s_arduinoOtaOn) {
         ArduinoOTA.begin();
         Serial.printf("[OTA] ArduinoOTA started (mDNS: %s.local)\n", ArduinoOTA.getHostname().c_str());
@@ -654,12 +637,9 @@ void OtaMgr::attachTo(AsyncWebServer& server) {
 
 void OtaMgr::loop() {
     // v6.1 FIX: раньше handle() вызывался ТОЛЬКО при s_isUpdating==true, а этот
-    // флаг выставляется из ArduinoOTA.onStart, который срабатывает изнутри самого
-    // handle(). Замкнутый круг — ArduinoOTA никогда не стартовал, обновление из
     // PlatformIO по сети было нерабочим. handle() обязан вызываться всегда:
     // он слушает mDNS/UDP и сам решает, началась ли сессия.
     if (s_arduinoOtaOn) ArduinoOTA.handle();
-    // Перезагрузка после успешного обновления
     if (s_rebootPending.load() && steadyMs() >= s_rebootAtMs) {
         s_rebootPending.store(false);
         Serial.println(F("[OTA] Rebooting now..."));
