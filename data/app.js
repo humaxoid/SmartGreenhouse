@@ -266,7 +266,7 @@ window.setTelemetry=setTelemetry;
 function renderState(s){if(s.fwVersion)setFwVersion(s.fwVersion);
 if(typeof s.tzOff==='number'&&s.tzOff!==_tzOff){_tzOff=s.tzOff;if(_histRaw)renderHistory(_histRaw);if(_evData)renderEvents(_evData);}
 if(s.time){var tp=s.time.split(':');var eH=$('tH'),eM=$('tM');if(eH)eH.textContent=tp[0]||'--';if(eM)eM.textContent=tp[1]||'--';}
-if(s.uptime){var sec=s.uptime|0;var d=Math.floor(sec/86400),h=Math.floor((sec%86400)/3600),m=Math.floor((sec%3600)/60);var eD=$('utD'),eH2=$('utH'),eM2=$('utM');if(eD)eD.textContent=pad2(d);if(eH2)eH2.textContent=pad2(h);if(eM2)eM2.textContent=pad2(m);var su=$('sbUp');if(su)su.textContent=fmtUptime(sec);$('infoUptime')&&($('infoUptime').textContent=d+'d '+pad2(h)+':'+pad2(m));}
+if(s.uptime){var sec=s.uptime|0;var d=Math.floor(sec/86400),h=Math.floor((sec%86400)/3600),m=Math.floor((sec%3600)/60);var eD=$('utD'),eH2=$('utH'),eM2=$('utM');if(eD)eD.textContent=pad2(d);if(eH2)eH2.textContent=pad2(h);if(eM2)eM2.textContent=pad2(m);$('infoUptime')&&($('infoUptime').textContent=d+'d '+pad2(h)+':'+pad2(m));}
 if(s.wifi){var rssi=s.wifi.rssi|0;var pct=rssiToPct(rssi);var noLink=(pct===0&&rssi>=0);
 var rf=$('sbRssiFill'),rp=$('sbRssiPct'),rd=$('sbRssiDbm'),rb=$('sbRssi');
 if(rf){rf.style.width=pct+'%';rf.style.backgroundColor=rssiColor(pct);}
@@ -612,7 +612,7 @@ if(s.fwVersion)setFwVersion(s.fwVersion);}
 // релиза, показывая 6.0 на прошивке 6.1.
 function setFwVersion(v){
   if(!v)return;
-  ['fwVersion','infoFw','aboutVersion','sbVer'].forEach(function(id){
+  ['fwVersion','infoFw','aboutVersion'].forEach(function(id){
     var el=$(id); if(el)el.textContent=v;
   });
 }

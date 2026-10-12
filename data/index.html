@@ -30,16 +30,15 @@
             <div class="sb-info"><span class="sb-rssi" id="sbRssi" title="Wi-Fi RSSI">&#128246;<span class="rssi-bar"><i id="sbRssiFill"></i><b id="sbRssiPct">--%</b></span><span id="sbRssiDbm">-- dBm</span></span><span
                     class="sb-heap" id="sbHeap" title="Free heap">-- KB</span></div><a class="sb-link sb-active"
                 href="#" data-page="dashboard" onclick="showPage('dashboard');return false;"
-                data-i18n="nav_control">Dashboard</a><a class="sb-link" href="#" data-page="history"
-                onclick="showPage('history');return false;" data-i18n="nav_history">History</a><a class="sb-link" href="#" data-page="events"
-                onclick="showPage('events');return false;" data-i18n="nav_events">Event log</a><a class="sb-link" href="#"
-                data-page="system" onclick="showPage('system');return false;" data-i18n="nav_system">System status</a><a
-                class="sb-link" href="#" data-page="settings"
+                data-i18n="nav_control">Dashboard</a><a class="sb-link" href="#" data-page="settings"
                 onclick="showPage('settings');return false;" data-i18n="nav_settings">Settings</a><a class="sb-link"
-                href="#" id="aboutLink" data-i18n="nav_about">About</a>
+                href="#" data-page="system" onclick="showPage('system');return false;"
+                data-i18n="nav_system">System status</a><a class="sb-link" href="#" data-page="history"
+                onclick="showPage('history');return false;" data-i18n="nav_history">History</a><a class="sb-link" href="#"
+                data-page="events" onclick="showPage('events');return false;" data-i18n="nav_events">Event log</a><a
+                class="sb-link" href="#" id="aboutLink" data-i18n="nav_about">About</a>
             <div class="sb-bottom">
-                <div class="sb-ver"><span>v</span><span id="sbVer">—</span><span class="sb-dot">·</span><span
-                        id="sbUp">—</span></div><button type="button" class="sb-logout" id="btnLogout" onclick="doLogout()"
+                <button type="button" class="sb-logout" id="btnLogout" onclick="doLogout()"
                     data-i18n="btn_logout">Logout</button></div>
         </nav>
         <div class="sb-overlay" id="sbOverlay" onclick="closeSidebar()"></div>
