@@ -100,6 +100,7 @@ def build_container(source, target, env):  # noqa: ARG001 — сигнатура
            "--major", str(major),
            "--minor", str(minor),
            "--out", out_path]
+    # Подписанный контейнер (формат 2), если есть ключ (тот же, что встраивает
     # tools/ota_pubkey.py). GH_CONTAINER_V1=1 — неподписанный формат 1: нужен один
     # раз, чтобы перевести устройство с прошивки, которая формат 2 ещё не знает.
     key = sign_key_path()
@@ -121,9 +122,12 @@ def build_container(source, target, env):  # noqa: ARG001 — сигнатура
     print("")
 
 
+# Пересобирать контейнер надо и после прошивки, и после файловой системы.
 #
 # Только на прошивку вешать нельзя: если поправить что-то в data/ и запустить
 # Build Filesystem Image, образ обновится, а прошивка останется нетронутой —
+# post-действие на неё не сработает, и в контейнере останется СТАРАЯ файловая
+# система. Поймано ровно на этом: littlefs.bin в сборке и внутри контейнера
 # разошлись.
 env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", build_container)  # noqa: F821
 env.AddPostAction("$BUILD_DIR/littlefs.bin", build_container)     # noqa: F821

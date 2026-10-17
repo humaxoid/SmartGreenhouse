@@ -25,6 +25,8 @@ struct NetCache {
     char dns2[16];
     char webUser[32];
     char webPass[32];
+    // Пароль ArduinoOTA (прошивка из PlatformIO по сети). Отдельный от пароля
+    // панели; пустой — ArduinoOTA не запускается вовсе. Ключ NVS "otap".
     char otaPass[32];
 };
 
@@ -126,9 +128,12 @@ namespace NetMgr {
     // false — запись в NVS не удалась, прежние логин и пароль остаются в силе.
     bool saveWebCreds(const char* user, const char* pass);
 
+    // Пароль ArduinoOTA; "" — выключить. Действует после перезагрузки
+    // (ArduinoOTA принимает пароль только до begin()). false — сбой NVS.
     bool saveOtaPass(const char* pass);
 
     // Действуют заводские логин и пароль (WEB_DEFAULT_USER / WEB_DEFAULT_PASS).
+    // Пока это так, всё изменяющее и обновление прошивки отклоняются.
     bool credsAreDefault();
 
 }  // namespace NetMgr

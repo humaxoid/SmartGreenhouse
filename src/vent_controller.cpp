@@ -100,7 +100,7 @@ enum VentCmdType : uint8_t {
     VC_HOMING_START,    // arg = сторона: 0 верх, 1 низ
     VC_HOMING_CANCEL,
     VC_SET_CALIB,       // arg = сторона, val = секунды
-    VC_FORCE_STOP
+    VC_FORCE_STOP       // реле уже обесточены снаружи (OTA): согласовать учёт
 };
 
 struct VentCmd {
@@ -906,10 +906,13 @@ void VentCtrl::getStatus(VentStatusSnapshot& out) {
 
 // v6.3: реле форточек обесточены СНАРУЖИ (OtaMgr::gracefulShutdown зовёт
 // RelayMgr::forceOff), а VentCtrl считает моторы идущими: leaf.dir остаётся
+// OPEN/CLOSE. Если обновление не удалось и автоматика возобновилась, зажатая
 // кнопка видела бы leaf.dir == newDir и ничего не запускала (setMotorDir
 // выходит рано), а расчётная позиция «росла» бы за счёт времени загрузки.
 //
+// Команду исполняет update() после возобновления, поэтому время остановки
 // запоминается в момент вызова forceStopAll(): позиция интегрируется до него,
+// а не до конца загрузки. Повторные вызовы (OTA зовёт останов и перед
 // прошивкой, и перед файловой системой) сохраняют самое раннее время.
 static std::atomic<bool>     s_forceStopPending{false};
 static std::atomic<uint32_t> s_forceStopMs{0};

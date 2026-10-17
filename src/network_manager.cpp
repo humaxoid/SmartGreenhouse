@@ -90,7 +90,7 @@ static void loadCache() {
     readStr("dns2", s_cache.dns2,    sizeof(s_cache.dns2),    NET_DEFAULT_DNS2);
     readStr("wusr", s_cache.webUser, sizeof(s_cache.webUser), WEB_DEFAULT_USER);
     readStr("wpas", s_cache.webPass, sizeof(s_cache.webPass), WEB_DEFAULT_PASS);
-    readStr("otap", s_cache.otaPass, sizeof(s_cache.otaPass), "");
+    readStr("otap", s_cache.otaPass, sizeof(s_cache.otaPass), "");   // пусто — ArduinoOTA выключен
 
     s_prefs.end();
     // v6.1: печатаем то, от чего зависит ключевая развилка в setup().
@@ -106,6 +106,7 @@ static void loadCache() {
 // ═══════════════════════════════════════════════════════════════════
 // Реакция на события Wi-Fi стека. Выполняется в контексте события
 // (в задаче Event Task на Core 0), поэтому тяжёлые операции здесь
+// запрещены — только быстрые обновления флагов.
 //
 // ARDUINO_EVENT_WIFI_STA_GOT_IP: подключились, получили IP.
 //   • Устанавливаем s_wifiConnected = true

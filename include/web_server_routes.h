@@ -6,7 +6,9 @@
 // ║   • Статику из LittleFS (/, /app.js, /style.css, /chart.js)     ║
 // ║   • REST API для настроек сети, MQTT, учётных данных            ║
 // ║   • WebSocket (через WsHandler::attachTo)                        ║
+// ║   • OTA эндпоинт (через OtaMgr::attachTo)                        ║
 // ║                                                                  ║
+// ║  Все эндпоинты (кроме OTA и статики с заголовком Cache-Control)  ║
 // ║  требуют HTTP Basic Auth.                                        ║
 // ╚══════════════════════════════════════════════════════════════════╝
 

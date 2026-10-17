@@ -107,7 +107,9 @@ static void sendAck(AsyncWebServerRequest* req, bool ok, const char* error = nul
 
 // ── Страница восстановления ───────────────────────────────────────
 // v6.3: если файловая система пуста или переформатирована (оборвалась
+// заливка контейнера на этапе FS, чистый флеш), корень раньше отвечал
 // «500 LittleFS not uploaded», и вернуть панель можно было только по USB.
+// Теперь отдаётся эта встроенная страница: она грузит контейнер
 // greenhouse_vX.Y.bin на тот же /update с тем же паролем. Сама по себе
 // страница ничего не раскрывает и ничего не делает без авторизации.
 static const char RECOVERY_HTML[] PROGMEM = R"RECOVERY(<!DOCTYPE html>
@@ -432,6 +434,7 @@ static void handleWebCreds(AsyncWebServerRequest* req, JsonVariant& json) {
 }
 
 // ── POST /api/otapass ─────────────────────────────────────────────
+// Body: { "pass": "..." } — пароль ArduinoOTA (прошивка из PlatformIO по сети).
 // Пустой — канал выключен. Действует после перезагрузки.
 static void handleOtaPass(AsyncWebServerRequest* req, JsonVariant& json) {
     if (!requireAuth(req)) return;
@@ -675,6 +678,7 @@ void WebRoutes::init() {
     addPost("/api/reset_wifi",    handleResetWifi);
     addPost("/api/reboot",        handleReboot);
 
+    // WebSocket и OTA
     WsHandler::attachTo(s_server);
     OtaMgr::attachTo(s_server);
 
