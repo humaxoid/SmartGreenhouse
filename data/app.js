@@ -660,8 +660,9 @@ async function applyWebCreds(){var c=$('wbCurPass').value,u=$('wbUser').value.tr
 stopStatePoll();
 try{var r=await fetchJson('/api/webcreds',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({curPass:c,user:u,pass:p})});if(r.ok&&r.token){toast(i18n('toast_saved'),'success');_authUser=u;_authToken=r.token;_ss.setItem('gh_u',u);_ss.setItem('gh_t',r.token);$('wbPass').value='';$('wbCurPass').value='';_credsDefault=false;showAppShell();if(ws&&ws.readyState!==WebSocket.CLOSED){ws.onclose=null;ws.onmessage=null;ws.close();}ws=null;wsConnect();}else{toast(r.error||i18n('err_generic'),'error');startStatePoll();}}catch(e){toast(i18n('err_generic')+': '+e.message,'error');startStatePoll();}}
 window.applyWebCreds=applyWebCreds;
-async function applyOtaPass(){var el=$('otaPass'),p=el?el.value:'';if(p.length&&(p.length<8||p.length>31)){toast(i18n('err_ota_pass_len'),'warning');return;}
-try{var r=await fetchJson('/api/otapass',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pass:p})});if(r.ok){toast(i18n('ota_pass_saved'),'success');el.value='';loadAllSettings();}else toast(r.error||i18n('err_generic'),'error');}catch(e){toast(i18n('err_generic')+': '+e.message,'error');}}
+// Текущий пароль панели обязателен и здесь: ArduinoOTA шьёт без проверки подписи.
+async function applyOtaPass(){var el=$('otaPass'),p=el?el.value:'',cEl=$('otaCurPass'),c=cEl?cEl.value:'';if(!c){toast(i18n('err_cur_password'),'warning');return;}if(p.length&&(p.length<8||p.length>31)){toast(i18n('err_ota_pass_len'),'warning');return;}
+try{var r=await fetchJson('/api/otapass',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({curPass:c,pass:p})});if(r.ok){toast(i18n('ota_pass_saved'),'success');el.value='';cEl.value='';loadAllSettings();}else toast(r.error||i18n('err_generic'),'error');}catch(e){toast(i18n('err_generic')+': '+e.message,'error');}}
 window.applyOtaPass=applyOtaPass;async function sysReboot(){if(!confirm(i18n('toast_confirm_reboot')))return;try{await fetchJson('/api/reboot',{method:'POST'});toast(i18n('msg_rebooting'),'info');}
 catch(e){toast(e.message,'error');}}
 window.sysReboot=sysReboot;

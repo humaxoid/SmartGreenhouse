@@ -398,6 +398,24 @@ static void handleLogout(AsyncWebServerRequest* req) {
     sendAck(req, true);
 }
 
+// Текущий пароль панели из тела запроса — за время, не зависящее от места
+// расхождения. Нужен там, где одного токена сессии мало: украденный токен не
+// должен давать ни смену пароля, ни включение ArduinoOTA (прошивка мимо
+// проверки подписи). Неверный — считается попыткой входа, ответ 403.
+static bool curPassOk(AsyncWebServerRequest* req, JsonObject body) {
+    const char* cur  = body["curPass"] | "";
+    const char* real = NetMgr::cache().webPass;
+    const size_t curLen = strlen(cur), realLen = strlen(real);
+    uint8_t diff = (uint8_t)(curLen != realLen);
+    for (size_t i = 0; i < curLen && i < realLen; i++) diff |= (uint8_t)(cur[i] ^ real[i]);
+    if (diff) {
+        EventLog::authFail();
+        sendAck(req, false, "current password is wrong", 403);
+        return false;
+    }
+    return true;
+}
+
 // ── POST /api/webcreds ────────────────────────────────────────────
 // Новый пароль — от 8 символов и не заводской admin/admin (пароли от 4
 // символов, заданные раньше, продолжают работать до смены). Смена сбрасывает
@@ -410,17 +428,8 @@ static void handleWebCreds(AsyncWebServerRequest* req, JsonVariant& json) {
     const char* pass = body["pass"] | "";
     // Текущий пароль обязателен: иначе украденный токен сессии позволял бы
     // сменить пароль и запереть владельца снаружи (вернуть доступ — только
-    // стиранием NVS по USB). Неверный — считается попыткой входа.
-    const char* cur  = body["curPass"] | "";
-    const char* real = NetMgr::cache().webPass;
-    const size_t curLen = strlen(cur), realLen = strlen(real);
-    uint8_t diff = (uint8_t)(curLen != realLen);
-    for (size_t i = 0; i < curLen && i < realLen; i++) diff |= (uint8_t)(cur[i] ^ real[i]);
-    if (diff) {
-        EventLog::authFail();
-        sendAck(req, false, "current password is wrong", 403);
-        return;
-    }
+    // стиранием NVS по USB).
+    if (!curPassOk(req, body)) return;
     if (strlen(user) < 1 || strlen(user) > 31) { sendAck(req, false, "user length 1-31", 400); return; }
     if (strlen(pass) < 8 || strlen(pass) > 31) { sendAck(req, false, "pass length 8-31", 400); return; }
     if (strcmp(user, WEB_DEFAULT_USER) == 0 && strcmp(pass, WEB_DEFAULT_PASS) == 0) {
@@ -442,11 +451,15 @@ static void handleWebCreds(AsyncWebServerRequest* req, JsonVariant& json) {
 }
 
 // ── POST /api/otapass ─────────────────────────────────────────────
-// Body: { "pass": "..." } — пароль ArduinoOTA (прошивка из PlatformIO по сети).
-// Пустой — канал выключен. Действует после перезагрузки.
+// Body: { "curPass": "...", "pass": "..." } — пароль ArduinoOTA (прошивка из
+// PlatformIO по сети). Пустой — канал выключен. Действует после перезагрузки.
+// Текущий пароль панели обязателен: ArduinoOTA шьёт прошивку без проверки
+// подписи, и включить его по одному украденному токену сессии значило бы
+// обойти подпись обновлений (токен ходит по HTTP открытым текстом).
 static void handleOtaPass(AsyncWebServerRequest* req, JsonVariant& json) {
     if (!requireAuth(req)) return;
     JsonObject body = json.as<JsonObject>();
+    if (!curPassOk(req, body)) return;
     if (!body["pass"].is<const char*>()) { sendAck(req, false, "pass (string) required", 400); return; }
     const char* p = body["pass"];
     const size_t n = strlen(p);

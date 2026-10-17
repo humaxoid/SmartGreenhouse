@@ -489,6 +489,10 @@
                         </p>
                         <div class="section-title" data-i18n="set_ota_pass_title">Network flashing from PlatformIO</div>
                         <p class="hint" data-i18n="set_ota_pass_hint">Separate password for ArduinoOTA. Empty — the channel is off.</p>
+                        <div class="input-box pass-wrap"><input type="password" id="otaCurPass"
+                                autocomplete="current-password" placeholder=" "><label for="otaCurPass"
+                                data-i18n="set_cur_password">Current password</label><button type="button" class="pass-eye"
+                                onclick="togglePass('otaCurPass')">&#128065;</button></div>
                         <div class="input-box pass-wrap"><input type="password" id="otaPass" autocomplete="new-password"
                                 placeholder=" "><label data-i18n="set_ota_pass">ArduinoOTA password</label><button
                                 type="button" class="pass-eye" onclick="togglePass('otaPass')">&#128065;</button></div>
