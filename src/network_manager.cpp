@@ -434,7 +434,11 @@ bool NetMgr::saveOtaPass(const char* pass) {
         Serial.println(F("[NET] !!! NVS begin(net3) FAILED — OTA password NOT saved !!!"));
         return false;
     }
-    const bool ok = s_prefs.putString("otap", pass) == strlen(pass);
+    // Контрольное чтение: для пустой строки putString() возвращает 0 и при
+    // успехе, и при ошибке — сравнение с длиной сбой выключения не увидело
+    // бы, и после перезагрузки канал, обходящий подпись, включился бы снова.
+    s_prefs.putString("otap", pass);
+    const bool ok = s_prefs.getString("otap", "\x01") == pass;
     s_prefs.end();
     if (!ok) {
         Serial.println(F("[NET] !!! OTA password write FAILED"));
@@ -671,8 +675,18 @@ bool NetMgr::saveWebCreds(const char* user, const char* pass) {
         Serial.println(F("[NET] !!! NVS begin(net3) FAILED — web credentials NOT saved !!!"));
         return false;
     }
-    const bool ok = s_prefs.putString("wusr", user) == strlen(user)
-                 && s_prefs.putString("wpas", pass) == strlen(pass);
+    // Пара пишется двумя ключами. Если логин записался, а пароль нет, во флеше
+    // остался бы новый логин со старым паролем: после перезагрузки не подошла
+    // бы ни старая пара, ни новая, и вернуть доступ можно только по USB.
+    // Поэтому при сбое пароля логин откатывается.
+    bool ok = s_prefs.putString("wusr", user) == strlen(user);
+    if (ok && s_prefs.putString("wpas", pass) != strlen(pass)) {
+        ok = false;
+        if (s_prefs.putString("wusr", s_cache.webUser) != strlen(s_cache.webUser)) {
+            Serial.println(F("[NET] !!! Web login rollback FAILED: after reboot the NEW login"
+                             " works with the OLD password !!!"));
+        }
+    }
     s_prefs.end();
     if (!ok) {
         Serial.println(F("[NET] !!! Web credentials write FAILED"));

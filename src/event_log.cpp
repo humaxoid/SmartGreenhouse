@@ -84,7 +84,9 @@ static bool isImportant(EvType t, uint8_t arg) {
         case EV_AUTH_FAIL: case EV_OTA: case EV_REBOOT:
             return true;
         case EV_SETTINGS:
-            return arg == EVS_FACTORY;
+            // Сброс, смена пароля панели и включение ArduinoOTA (шьёт мимо
+            // проверки подписи) не должны тонуть среди реле и форточек.
+            return arg == EVS_FACTORY || arg == EVS_CREDS || arg == EVS_OTA_PASS_SET;
         default:
             return false;   // реле, форточки, режимы, дождь, обычные настройки
     }

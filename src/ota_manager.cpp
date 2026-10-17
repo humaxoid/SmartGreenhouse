@@ -51,6 +51,7 @@ std::atomic<bool> s_uploadActive{false};
 AsyncWebServerRequest* s_uploadOwner = nullptr;
 bool              s_arduinoOtaIsFs = false;   // текущая сессия ArduinoOTA пишет FS
 bool              s_arduinoOtaOn   = false;   // ArduinoOTA запущен (задан свой пароль)
+bool              s_arduinoOtaBusy = false;   // сессия ArduinoOTA дошла до onStart (Update взят)
 
 // ═══════════════════════════════════════════════════════════════════
 //  ФОРМАТ КОНТЕЙНЕРА (заголовок 32 байта)
@@ -110,16 +111,25 @@ struct UploadState {
 };
 static UploadState s_up = {};
 static mbedtls_sha256_context s_sha;   // хэш текущей части (прошивка, затем FS), формат 2
+// Контекст начат и не освобождён. В этой сборке SHA-256 считает аппаратный
+// блок, и начатый контекст держит его до free(): без освобождения при сбое
+// загрузки блок оставался бы занят до перезагрузки, а TLS и следующая
+// загрузка уходили бы на программный расчёт.
+static bool s_shaLive = false;
 
 // Хэш части: начать / дописать / сверить с заголовком (и освободить контекст).
 static void shaBegin() {
     mbedtls_sha256_init(&s_sha);
     mbedtls_sha256_starts_ret(&s_sha, 0);
+    s_shaLive = true;
+}
+static void shaRelease() {
+    if (s_shaLive) { mbedtls_sha256_free(&s_sha); s_shaLive = false; }
 }
 static bool shaMatches(const uint8_t* want) {
     uint8_t got[32];
     const bool ok = mbedtls_sha256_finish_ret(&s_sha, got) == 0 && memcmp(got, want, 32) == 0;
-    mbedtls_sha256_free(&s_sha);
+    shaRelease();
     return ok;
 }
 
@@ -219,6 +229,7 @@ static void gracefulShutdown(bool isLittleFs) {
 //  ОБРАБОТКА БАЙТОВ КОНТЕЙНЕРА
 // ═══════════════════════════════════════════════════════════════════
 static void setError(const char* msg) {
+    shaRelease();
     s_up.phase = UP_ERROR;
     snprintf(s_up.errMsg, sizeof(s_up.errMsg), "%s", msg);
     Serial.printf("[OTA] ERROR: %s\n", msg);
@@ -456,7 +467,13 @@ static bool otaCheckAuth(AsyncWebServerRequest* req) {
         // Исключение — страница восстановления (панели на флеше нет): сменить
         // пароль там негде, а без загрузки контейнера панель не вернуть.
         // Пустую файловую систему снаружи не устроить.
+        // Только в сборке с ключом: там пройдёт лишь подписанный владельцем
+        // контейнер. Без ключа пустая FS — обычное состояние после первой
+        // прошивки по USB, и admin/admin открывал бы /update любому в сети;
+        // такой сборке панель заливают по USB (uploadfs).
+#ifdef OTA_PUBKEY_PEM
         if (!LittleFS.exists("/index.html")) return true;
+#endif
         Serial.println(F("[OTA] Rejected: default credentials still in use"));
         req->send(403, "application/json", "{\"ok\":false,\"error\":\"default_credentials\"}");
         return false;
@@ -639,6 +656,7 @@ void setupArduinoOTA() {
         bool isFs = (ArduinoOTA.getCommand() == U_SPIFFS);
         s_arduinoOtaIsFs = isFs;
         Serial.printf("[OTA] ArduinoOTA start (%s)\n", isFs ? "FS" : "FW");
+        s_arduinoOtaBusy = true;
         s_isUpdating.store(true);
         gracefulShutdown(isFs);
         esp_task_wdt_delete(NULL);
@@ -653,8 +671,28 @@ void setupArduinoOTA() {
     });
     ArduinoOTA.onError([](ota_error_t err) {
         Serial.printf("[OTA] ArduinoOTA error: %u\n", (unsigned)err);
+        // onStart библиотека зовёт только после успешного Update.begin().
+        // Без него (неверный пароль, Update занят веб-загрузкой) сессия ничего
+        // не трогала: abortFailedUpdate() оборвал бы чужое обновление посреди
+        // записи, а поток пакетов с неверным паролем вытеснял бы важные
+        // события журнала. После onStart — полный откат. Флаг снимается сразу:
+        // после OTA_CONNECT_ERROR библиотека зовёт onError второй раз.
+        if (!s_arduinoOtaBusy) {
+            // Неверный пароль — в общий счётчик неудачных входов: канал шьёт
+            // мимо проверки подписи, и подбор пароля к нему должен быть виден.
+            if (err == OTA_AUTH_ERROR) EventLog::authFail();
+            return;
+        }
+        s_arduinoOtaBusy = false;
         abortFailedUpdate();
     });
+
+    // Запуск — здесь, после пароля и обработчиков. OtaMgr::init() идёт в
+    // setup() ПОСЛЕ WebRoutes::init() (а значит, и после attachTo()): стоял
+    // бы begin() там, он видел бы ещё не поднятый s_arduinoOtaOn, и канал
+    // не запускался бы никогда.
+    ArduinoOTA.begin();
+    Serial.printf("[OTA] ArduinoOTA started (mDNS: %s.local)\n", ArduinoOTA.getHostname().c_str());
 }
 
 }  // anonymous namespace
@@ -664,7 +702,6 @@ void setupArduinoOTA() {
 // ═══════════════════════════════════════════════════════════════════
 void OtaMgr::init() {
     setupArduinoOTA();
-    Serial.println(F("[OTA] ArduinoOTA configured (not started yet)"));
 }
 
 void OtaMgr::attachTo(AsyncWebServer& server) {
@@ -676,12 +713,6 @@ void OtaMgr::attachTo(AsyncWebServer& server) {
         nullptr                         // body (не используется)
     );
     Serial.println(F("[OTA] /update endpoint registered (greenhouse_vX.Y.bin format)"));
-
-    // Запуск ArduinoOTA здесь — только если задан его собственный пароль.
-    if (s_arduinoOtaOn) {
-        ArduinoOTA.begin();
-        Serial.printf("[OTA] ArduinoOTA started (mDNS: %s.local)\n", ArduinoOTA.getHostname().c_str());
-    }
 }
 
 void OtaMgr::loop() {
@@ -690,7 +721,12 @@ void OtaMgr::loop() {
     // handle(). Замкнутый круг — ArduinoOTA никогда не стартовал, обновление из
     // PlatformIO по сети было нерабочим. handle() обязан вызываться всегда:
     // он слушает mDNS/UDP и сам решает, началась ли сессия.
-    if (s_arduinoOtaOn) ArduinoOTA.handle();
+    // Пока идёт веб-загрузка или ждёт перезагрузки принятое обновление,
+    // ArduinoOTA не слушаем: его Update.begin() прошёл бы в окне до записи
+    // (приём и проверка заголовка) или после неё и затёр бы раздел, только
+    // что назначенный загрузочным.
+    if (s_arduinoOtaOn && (s_arduinoOtaBusy || (!s_isUpdating.load() && !s_rebootPending.load())))
+        ArduinoOTA.handle();
     // Перезагрузка после успешного обновления
     if (s_rebootPending.load() && steadyMs() >= s_rebootAtMs) {
         s_rebootPending.store(false);

@@ -826,6 +826,10 @@ recovery page: enter the login and password, choose the
 `greenhouse_vX.Y.bin` container and press Upload — it contains the panel too.
 Or run **Upload Filesystem Image** over USB.
 
+With the factory `admin`/`admin` the recovery page accepts a container only
+on firmware built with a signing key. A build without a key refuses it
+(anyone on the network knows that password), so upload the panel over USB.
+
 </details>
 
 <details>
@@ -849,7 +853,6 @@ data/             web panel (LittleFS): index.html, app.js, style.css
 tools/            OTA container packer and build post-script
 platformio.ini    build setup, dependencies, environments
 CHANGELOG.md      version history
-CLAUDE.md         working notes for future development
 ```
 
 ---

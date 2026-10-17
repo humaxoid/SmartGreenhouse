@@ -50,6 +50,7 @@ enum EvSettings : uint8_t {
     EVS_THRESHOLDS = 0, EVS_TIMER = 1, EVS_WATER = 2, EVS_NETWORK = 3,
     EVS_MQTT = 4, EVS_CREDS = 5, EVS_NTP = 6, EVS_CALIB = 7,
     EVS_FACTORY = 8, EVS_HISTORY_CLEARED = 9,
+    EVS_OTA_PASS_SET = 10, EVS_OTA_PASS_OFF = 11,   // пароль ArduinoOTA задан / канал выключен
 };
 
 struct __attribute__((packed)) EvRecord {

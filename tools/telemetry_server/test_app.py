@@ -137,9 +137,39 @@ def test_failed_logins_table_is_bounded():
     assert len(appmod._fails) <= 1
 
 
-def test_failed_logins_table_is_bounded_with_fresh_entries():
+def test_failed_logins_table_full_of_fresh_entries_refuses_new_addresses():
     now = appmod.time.time()
+    for i in range(appmod.FAILS_MAX_IPS + 50):
+        appmod._fails[f"2001:db8:{i:x}::/64"] = [now - 10]
+    r = client.get("/admin", headers=basic("admin", PASSWORD))
+    assert r.status_code == 429
+    assert len(appmod._fails) == appmod.FAILS_MAX_IPS + 50
+
+
+def test_ipv4_mapped_addresses_are_not_merged():
+    assert appmod._fail_key("::ffff:1.2.3.4") == "1.2.3.4"
+    assert appmod._fail_key("::ffff:1.2.3.4") != appmod._fail_key("::ffff:5.6.7.8")
+
+
+def test_ipv6_failures_counted_per_64():
+    for i in range(5):
+        client.get("/admin", headers=dict(basic("admin", "wrong"), **{"X-Real-IP": f"2001:db8:1:2::{i + 1:x}"}))
+    r = client.get("/admin", headers=dict(basic("admin", PASSWORD), **{"X-Real-IP": "2001:db8:1:2::99"}))
+    assert r.status_code == 429
+
+
+def test_table_full_of_lockouts_refuses_new_addresses():
+    now = appmod.time.time()
+    for i in range(appmod.FAILS_MAX_IPS + 5):
+        appmod._fails[f"198.51.{i // 256}.{i % 256}"] = [now - 1] * 5
+    r = client.get("/admin", headers=dict(basic("admin", PASSWORD), **{"X-Real-IP": "192.0.2.50"}))
+    assert r.status_code == 429
+
+
+def test_flood_of_new_addresses_does_not_lift_a_lockout():
+    now = appmod.time.time()
+    appmod._fails["203.0.113.7"] = [now - 1] * 5          # заблокирован
     for i in range(appmod.FAILS_MAX_IPS + 50):
         appmod._fails[f"2001:db8::{i:x}"] = [now - 10]
     client.get("/admin", headers=basic("admin", PASSWORD))
-    assert len(appmod._fails) <= appmod.FAILS_MAX_IPS // 2 + 1
+    assert "203.0.113.7" in appmod._fails

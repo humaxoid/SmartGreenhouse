@@ -149,7 +149,10 @@ document.getElementById('u').value+':'+document.getElementById('p').value))));
 x.upload.onprogress=function(e){if(e.lengthComputable)m.textContent=Math.round(e.loaded/e.total*100)+'%';};
 x.onload=function(){if(x.status===200){m.textContent='OK. Перезагрузка / Rebooting…';
 setTimeout(function(){location.reload();},12000);}
-else{var t=x.responseText;try{t=JSON.parse(t).error||t;}catch(e){}m.textContent='Ошибка / Error '+x.status+': '+t;}};
+else{var t=x.responseText;try{t=JSON.parse(t).error||t;}catch(e){}
+if(t==='default_credentials')t='сборка без ключа подписи не принимает обновление с заводским паролем \u2014 залейте файловую систему по USB / '
++'a build without a signing key refuses updates with the factory password \u2014 upload the filesystem over USB';
+m.textContent='Ошибка / Error '+x.status+': '+t;}};
 x.onerror=function(){m.textContent='Ошибка соединения / Connection error';};
 x.send(fd);};
 </script></body></html>)RECOVERY";
@@ -435,6 +438,12 @@ static void handleWebCreds(AsyncWebServerRequest* req, JsonVariant& json) {
     if (strcmp(user, WEB_DEFAULT_USER) == 0 && strcmp(pass, WEB_DEFAULT_PASS) == 0) {
         sendAck(req, false, "default credentials not allowed", 400); return;
     }
+    // Обратная сторона проверки в /api/otapass: совпадение паролей свело бы
+    // разделение на нет — знающий пароль панели получил бы и ArduinoOTA.
+    const char* otaPass = NetMgr::cache().otaPass;
+    if (otaPass[0] && strcmp(pass, otaPass) == 0) {
+        sendAck(req, false, "must differ from the ArduinoOTA password", 400); return;
+    }
     if (!NetMgr::saveWebCreds(user, pass)) {
         sendAck(req, false, "credentials not saved (NVS)", 500);
         return;
@@ -468,7 +477,7 @@ static void handleOtaPass(AsyncWebServerRequest* req, JsonVariant& json) {
         sendAck(req, false, "must differ from the panel password", 400); return;
     }
     if (!NetMgr::saveOtaPass(p)) { sendAck(req, false, "not saved (NVS)", 500); return; }
-    EventLog::add(EV_SETTINGS, EVS_CREDS);
+    EventLog::add(EV_SETTINGS, n ? EVS_OTA_PASS_SET : EVS_OTA_PASS_OFF);
     sendAck(req, true);
 }
 
@@ -547,8 +556,12 @@ static void handlePostUi(AsyncWebServerRequest* req, JsonVariant& json) {
 // 300 мс) — замирали веб-сокет и биения зажатой кнопки форточек, и привод мог
 // остановиться по истечении аренды. Теперь первый запрос запускает скан и
 // отвечает {"scanning":true}, панель повторяет запрос, пока не придёт список.
+// Первый запрос панели идёт с ?start=1: результат прошлого скана, который
+// никто не забрал (ушли со страницы посреди скана), иначе отдался бы как
+// свежий — с сетями, которых уже нет.
 static void handleWifiScan(AsyncWebServerRequest* req) {
     if (!requireAuth(req)) return;
+    if (req->hasParam("start") && WiFi.scanComplete() >= 0) WiFi.scanDelete();
     const int n = WiFi.scanComplete();
     if (n == WIFI_SCAN_RUNNING || n < 0) {
         if (n != WIFI_SCAN_RUNNING) WiFi.scanNetworks(true, false, false, 300);

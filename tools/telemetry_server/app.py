@@ -196,19 +196,36 @@ def check_password(password: str) -> bool:
         return False
 
 
+def _fail_key(ip: str) -> str:
+    """Ключ счётчика неудач: IPv6 — по сети /64. Абонент получает её целиком,
+    и по отдельным адресам он обходил бы лимит или забивал таблицу."""
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return ip
+    if addr.version == 6:
+        if addr.ipv4_mapped:      # ::ffff:a.b.c.d — это IPv4, иначе все они слились бы в ::/64
+            return str(addr.ipv4_mapped)
+        return str(ipaddress.ip_network(f"{addr}/64", strict=False))
+    return ip
+
+
 def require_admin(request: Request) -> None:
     """Basic-авторизация; после 5 неудач за 5 минут с одного адреса — 429."""
-    ip = client_ip(request)
+    ip = _fail_key(client_ip(request))
     now = time.time()
     # Словарь не должен расти с каждым новым адресом: пустые списки не
-    # храним, а когда адресов набирается много — выметаем устаревшие.
+    # храним, а когда адресов набирается много — выметаем тех, у кого нет
+    # свежих неудач. Записи со свежими неудачами не трогаем: иначе тысячей
+    # новых адресов можно было бы обнулять свои счётчики и подбирать пароль
+    # без ограничения. Если таблица целиком из свежих — новым адресам отказ,
+    # пока она не освободится (запереть так /admin можно — для этого в
+    # nginx.conf.example стоит limit_req и на /admin).
     if len(_fails) > FAILS_MAX_IPS:
-        for k in [k for k, v in _fails.items() if not v or now - v[-1] >= 300]:
+        for k in [k for k, v in _fails.items() if not any(now - t < 300 for t in v)]:
             del _fails[k]
-        if len(_fails) > FAILS_MAX_IPS:   # свежих слишком много — оставляем новейшую половину
-            keep = sorted(_fails.items(), key=lambda kv: kv[1][-1], reverse=True)[:FAILS_MAX_IPS // 2]
-            _fails.clear()
-            _fails.update(keep)
+        if len(_fails) > FAILS_MAX_IPS and ip not in _fails:
+            raise HTTPException(429, "too many attempts")
     recent = [t for t in _fails.get(ip, []) if now - t < 300]
     if recent:
         _fails[ip] = recent
