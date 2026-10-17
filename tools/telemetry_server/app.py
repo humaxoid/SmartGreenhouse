@@ -176,6 +176,7 @@ async def heartbeat(report: Report, request: Request) -> Response:
 
 # ──────────────────────────── админ ────────────────────────────
 _fails: dict[str, list[float]] = {}
+FAILS_MAX_IPS = 1000
 
 
 def make_hash(password: str, iterations: int = 200_000) -> str:
@@ -199,8 +200,20 @@ def require_admin(request: Request) -> None:
     """Basic-авторизация; после 5 неудач за 5 минут с одного адреса — 429."""
     ip = client_ip(request)
     now = time.time()
+    # Словарь не должен расти с каждым новым адресом: пустые списки не
+    # храним, а когда адресов набирается много — выметаем устаревшие.
+    if len(_fails) > FAILS_MAX_IPS:
+        for k in [k for k, v in _fails.items() if not v or now - v[-1] >= 300]:
+            del _fails[k]
+        if len(_fails) > FAILS_MAX_IPS:   # свежих слишком много — оставляем новейшую половину
+            keep = sorted(_fails.items(), key=lambda kv: kv[1][-1], reverse=True)[:FAILS_MAX_IPS // 2]
+            _fails.clear()
+            _fails.update(keep)
     recent = [t for t in _fails.get(ip, []) if now - t < 300]
-    _fails[ip] = recent
+    if recent:
+        _fails[ip] = recent
+    else:
+        _fails.pop(ip, None)
     if len(recent) >= 5:
         raise HTTPException(429, "too many attempts")
     hdr = request.headers.get("authorization", "")

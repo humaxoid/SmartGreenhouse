@@ -45,6 +45,10 @@ uint64_t          s_rebootAtMs = 0;
 //                   отличить обрыв соединения от обычного завершения запроса.
 std::atomic<bool> s_fsUnmounted{false};
 std::atomic<bool> s_uploadActive{false};
+// Запрос, которому принадлежит загрузка. Состояние s_up и хэш s_sha одни на
+// всё устройство: вторая загрузка, начатая поверх первой, сбросила бы их
+// посреди записи. Трогается только из задачи AsyncTCP.
+AsyncWebServerRequest* s_uploadOwner = nullptr;
 bool              s_arduinoOtaIsFs = false;   // текущая сессия ArduinoOTA пишет FS
 bool              s_arduinoOtaOn   = false;   // ArduinoOTA запущен (задан свой пароль)
 
@@ -147,7 +151,7 @@ static uint32_t crc32Update(uint32_t crc, const uint8_t* data, size_t len) {
     while (len--) {
         crc ^= *data++;
         for (int k = 0; k < 8; k++) {
-            crc = (crc >> 1) ^ (0xEDB88320 & -(int32_t)(crc & 1));
+            crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1u)));   // маска без знаковой арифметики
         }
     }
     return ~crc;
@@ -473,6 +477,28 @@ static void handleUploadChunk(AsyncWebServerRequest* req,
     if (!otaCheckAuth(req)) return;
 
     if (index == 0) {
+        // Слот один. Занят — этот запрос данные не пишет, ответ 409 даст
+        // handleUpdateFinish(). s_isUpdating ловит и ArduinoOTA, и уже
+        // принятое обновление, ждущее перезагрузки.
+        if (s_uploadOwner != nullptr || s_isUpdating.load()) {
+            Serial.println(F("[OTA] Upload rejected: another update is in progress"));
+            return;
+        }
+        s_uploadOwner = req;
+        // Обрыв соединения: обработчик завершения запроса в этом случае не
+        // вызывается, зато вызывается onDisconnect. Если к этому моменту
+        // загрузка не доведена до конца — это сбой (см. abortFailedUpdate).
+        // onDisconnect срабатывает и после обычного ответа, поэтому слот
+        // снимается, только если он всё ещё у этого запроса.
+        req->onDisconnect([req]() {
+            if (s_uploadOwner != req) return;
+            s_uploadOwner = nullptr;
+            if (s_uploadActive.exchange(false)) {
+                setError("Connection lost during upload");
+                abortFailedUpdate();
+            }
+        });
+
         // Валидация имени файла: greenhouse_vX.Y.bin (X.Y = любые цифры)
         bool nameOk = false;
         if (filename.startsWith("greenhouse_v") && filename.endsWith(".bin")) {
@@ -502,15 +528,6 @@ static void handleUploadChunk(AsyncWebServerRequest* req,
         Serial.printf("[OTA] Web upload: %s\n", filename.c_str());
         s_isUpdating.store(true);
         s_uploadActive.store(true);
-        // Обрыв соединения: обработчик завершения запроса в этом случае не
-        // вызывается, зато вызывается onDisconnect. Если к этому моменту
-        // загрузка не доведена до конца — это сбой (см. abortFailedUpdate).
-        req->onDisconnect([]() {
-            if (s_uploadActive.exchange(false)) {
-                setError("Connection lost during upload");
-                abortFailedUpdate();
-            }
-        });
 
         // Сброс состояния
         s_up.phase     = UP_HEADER;
@@ -520,6 +537,8 @@ static void handleUploadChunk(AsyncWebServerRequest* req,
         s_up.errMsg[0] = 0;
         memset(&s_up.hdr, 0, sizeof(s_up.hdr));
     }
+
+    if (req != s_uploadOwner) return;   // чужая загрузка идёт — данные не наши
 
     if (s_up.phase == UP_ERROR) {
         // Уже в ошибке — продолжать нечего, просто принимаем оставшиеся
@@ -543,6 +562,17 @@ static void handleUploadChunk(AsyncWebServerRequest* req,
 static void handleUpdateFinish(AsyncWebServerRequest* req) {
     if (!otaCheckAuth(req)) return;
 
+    if (req != s_uploadOwner) {
+        if (s_uploadOwner != nullptr || s_isUpdating.load()) {
+            req->send(409, "application/json",
+                "{\"ok\":false,\"error\":\"Another update is in progress\"}");
+        } else {
+            req->send(400, "application/json", "{\"ok\":false,\"error\":\"No file\"}");
+        }
+        return;
+    }
+    s_uploadOwner = nullptr;
+
     // Загрузка дошла до конца запроса — дальше отвечаем за исход мы, а
     // не обработчик обрыва соединения.
     s_uploadActive.store(false);
@@ -551,10 +581,10 @@ static void handleUpdateFinish(AsyncWebServerRequest* req) {
     if (ok) EventLog::add(EV_OTA, 0, 1);   // отказ записывает abortFailedUpdate()
     JsonDocument doc;
     doc["ok"] = ok;
+    char msg[80];   // ArduinoJson копирует char[], но cppcheck этого не знает
     if (!ok) {
         doc["error"] = s_up.errMsg[0] ? s_up.errMsg : "Unknown error";
     } else {
-        char msg[80];
         snprintf(msg, sizeof(msg), "Update v%u.%u successful, rebooting...",
             (unsigned)s_up.hdr.fwMajor, (unsigned)s_up.hdr.fwMinor);
         doc["message"] = msg;
@@ -567,8 +597,10 @@ static void handleUpdateFinish(AsyncWebServerRequest* req) {
     req->send(resp);
 
     if (ok) {
-        s_rebootPending.store(true);
+        // Срок — до флага: loop() в другой задаче не должен увидеть флаг
+        // со старым сроком и перезагрузить раньше, чем уйдёт ответ.
         s_rebootAtMs = steadyMs() + 1500;
+        s_rebootPending.store(true);
     } else {
         abortFailedUpdate();
     }

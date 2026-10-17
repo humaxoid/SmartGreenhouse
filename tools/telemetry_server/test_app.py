@@ -127,3 +127,19 @@ def test_device_page_escapes_html():
     page = client.get("/admin", headers=basic("admin", PASSWORD)).text
     assert "<img src=x" not in page and "&lt;img" in page
     assert client.get("/admin/device/zzzz", headers=basic("admin", PASSWORD)).status_code == 404
+
+
+def test_failed_logins_table_is_bounded():
+    now = appmod.time.time()
+    for i in range(appmod.FAILS_MAX_IPS + 50):
+        appmod._fails[f"198.51.{i // 256}.{i % 256}"] = [now - 3600]
+    client.get("/admin", headers=basic("admin", PASSWORD))
+    assert len(appmod._fails) <= 1
+
+
+def test_failed_logins_table_is_bounded_with_fresh_entries():
+    now = appmod.time.time()
+    for i in range(appmod.FAILS_MAX_IPS + 50):
+        appmod._fails[f"2001:db8::{i:x}"] = [now - 10]
+    client.get("/admin", headers=basic("admin", PASSWORD))
+    assert len(appmod._fails) <= appmod.FAILS_MAX_IPS // 2 + 1

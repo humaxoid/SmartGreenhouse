@@ -23,10 +23,19 @@
 #include <ESPAsyncWebServer.h>
 #include <AsyncJson.h>
 #include <ArduinoJson.h>   // v7.x
+#include <atomic>
 
 static AsyncWebServer s_server(80);
-static volatile bool     s_rebootPending = false;
-static volatile uint64_t s_rebootAtMs    = 0;
+// Пишет AsyncTCP, читает loop() в loopTask. Срок записывается ДО флага:
+// иначе loop() мог увидеть поднятый флаг со старым сроком (0) и
+// перезагрузить контроллер раньше, чем ответ ушёл панели.
+static std::atomic<bool> s_rebootPending{false};
+static uint64_t          s_rebootAtMs = 0;
+
+static void scheduleReboot(uint64_t delayMs) {
+    s_rebootAtMs = steadyMs() + delayMs;
+    s_rebootPending.store(true);
+}
 
 // ── Auth ─────────────────────────────────────────────────────────
 // v6.1: второй аргумент requestAuthentication — это isDigest, а не realm-флаг:
@@ -279,8 +288,7 @@ static void handlePostNetwork(AsyncWebServerRequest* req, JsonVariant& json) {
     EventLog::add(EV_SETTINGS, EVS_NETWORK);
     sendAck(req, true);
     Serial.println(F("[HTTP] Network settings changed — reboot in 2s"));
-    s_rebootPending = true;
-    s_rebootAtMs = steadyMs() + 2000ULL;
+    scheduleReboot(2000ULL);
 }
 
 // ── GET/POST /api/telemetry ───────────────────────────────────────
@@ -554,8 +562,7 @@ static void handleFactoryReset(AsyncWebServerRequest* req) {
     settingsReset();
     EventLog::add(EV_SETTINGS, EVS_FACTORY);
     sendAck(req, true);
-    s_rebootPending = true;
-    s_rebootAtMs = steadyMs() + 2000ULL;
+    scheduleReboot(2000ULL);
 }
 
 // ── POST /api/reset_wifi ──────────────────────────────────────────
@@ -575,8 +582,7 @@ static void handleResetWifi(AsyncWebServerRequest* req) {
     Serial.println(F("[HTTP] WiFi credentials cleared — AP provisioning after reboot"));
     EventLog::add(EV_SETTINGS, EVS_NETWORK);
     sendAck(req, true);
-    s_rebootPending = true;
-    s_rebootAtMs = steadyMs() + 2000ULL;
+    scheduleReboot(2000ULL);
 }
 
 // ── POST /api/reboot ──────────────────────────────────────────────
@@ -585,8 +591,7 @@ static void handleReboot(AsyncWebServerRequest* req) {
     Serial.println(F("[HTTP] Manual reboot requested"));
     EventLog::add(EV_REBOOT, 0);
     sendAck(req, true);
-    s_rebootPending = true;
-    s_rebootAtMs = steadyMs() + 1000ULL;
+    scheduleReboot(1000ULL);
 }
 
 // ── Отложенная перезагрузка ──────────────────────────────────────
@@ -598,7 +603,7 @@ static void handleReboot(AsyncWebServerRequest* req) {
 // Теперь проверку делает loop(), который и так крутится каждые 100 мс.
 // Минус одна задача, минус 2 КБ RAM, реакция даже быстрее.
 bool WebRoutes::rebootDue() {
-    return s_rebootPending && steadyMs() >= s_rebootAtMs;
+    return s_rebootPending.load() && steadyMs() >= s_rebootAtMs;
 }
 
 // ═══════════════════════════════════════════════════════════════════

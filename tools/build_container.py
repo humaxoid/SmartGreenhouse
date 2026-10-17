@@ -104,6 +104,12 @@ def build_container(source, target, env):  # noqa: ARG001 — сигнатура
     # tools/ota_pubkey.py). GH_CONTAINER_V1=1 — неподписанный формат 1: нужен один
     # раз, чтобы перевести устройство с прошивки, которая формат 2 ещё не знает.
     key = sign_key_path()
+    if not key and os.environ.get("GH_OTA_KEY"):
+        # Ключ указан явно, но файла нет: неподписанный контейнер под тем же
+        # именем легко принять за выпускной. Старый файл, если есть, — прежний.
+        print("[container] GH_OTA_KEY=%s — файла нет, контейнер НЕ собран "
+              "(%s в корне, если есть, — от прошлой сборки)" % (os.environ["GH_OTA_KEY"], out_name))
+        return
     if key and os.environ.get("GH_CONTAINER_V1") != "1":
         cmd += ["--sign-key", key]
     elif key:
@@ -116,7 +122,7 @@ def build_container(source, target, env):  # noqa: ARG001 — сигнатура
         for line in result.stdout.strip().splitlines():
             print("[container]   %s" % line)
     else:
-        print("[container] упаковка не удалась:")
+        print("[container] упаковка не удалась (%s в корне, если есть, — от прошлой сборки):" % out_name)
         for line in (result.stderr or result.stdout).strip().splitlines():
             print("[container]   %s" % line)
     print("")

@@ -14,9 +14,9 @@
         <div class="login-card">
             <div class="login-logo">&#11044; <span id="loginTitle" data-i18n="login_title">Sign in</span></div>
             <div class="input-box"><input type="text" id="loginUser" autocomplete="username" placeholder=" "
-                    autocapitalize="none"><label data-i18n="login_user">Login</label></div>
+                    autocapitalize="none"><label for="loginUser" data-i18n="login_user">Login</label></div>
             <div class="input-box pass-wrap"><input type="password" id="loginPass" autocomplete="current-password"
-                    placeholder=" "><label data-i18n="login_pass">Password</label><button type="button" class="pass-eye"
+                    placeholder=" "><label for="loginPass" data-i18n="login_pass">Password</label><button type="button" class="pass-eye"
                     onclick="togglePass('loginPass')">&#128065;</button></div>
             <div id="loginError" class="login-error" style="display:none"></div><button type="button" class="btn-login" id="btnLogin"
                 onclick="doLogin()" data-i18n="login_btn">Sign in</button>

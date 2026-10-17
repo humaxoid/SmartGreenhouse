@@ -589,8 +589,11 @@ bool NetMgr::saveNetSettings(const NetCache& nc, bool savePass) {
         return ok;
     };
 
-    s_prefs.putBool("dhcp", nc.isDHCP);
-    bool ok = put("ssid", nc.ssid);
+    // putBool() возвращает 1 при успехе. Несохранённый dhcp после
+    // перезагрузки поменял бы режим адресации — это тоже сбой записи.
+    bool ok = (s_prefs.putBool("dhcp", nc.isDHCP) == 1);
+    if (!ok) Serial.println(F("[NET] !!! NVS write failed: dhcp"));
+    ok &= put("ssid", nc.ssid);
     if (savePass) ok &= put("pass", nc.pass);
     ok &= put("ip",   nc.ip);
     ok &= put("sub",  nc.subnet);

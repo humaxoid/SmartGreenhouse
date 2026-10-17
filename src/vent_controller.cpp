@@ -67,6 +67,7 @@ static uint64_t      s_autoStateMs = 0;       // Когда вошли в тек
 static float         s_tempBeforePause = NAN; // Температура до паузы (для решения о ступени)
 static VentSide      s_autoActiveSide = VS_TOP; // Какая форточка двигается в текущей ступени
 static int8_t        s_autoStepDir    = +1;     // +1 открываем, -1 закрываем
+static bool          s_autoStepPending = false; // пуск ступени отложен (мьютекс занят)
 
 // Защита от спама в Serial (логируем смену состояния)
 static VentAutoState s_lastLoggedState = (VentAutoState)0xFF;
@@ -443,9 +444,15 @@ static void setAutoState(VentAutoState newSt, uint64_t nowMs) {
 // Запустить движение мотора на одну ступень (20%).
 // Длительность: calibMs * 0.2.
 static void startStep(VentSide side, int8_t dir, uint64_t nowMs) {
-    setMotorDir(side, dir > 0 ? MD_OPEN : MD_CLOSE, nowMs);
+    const MotorDir want = dir > 0 ? MD_OPEN : MD_CLOSE;
+    setMotorDir(side, want, nowMs);
     s_autoActiveSide = side;
     s_autoStepDir    = dir;
+    // Если мьютекс был занят, setMotorDir() мотор не тронула: ступень ещё
+    // не началась, и stepCompleted() не должна принять стоящий мотор за
+    // отработавший — иначе ступень пропускалась целиком вместе с паузой.
+    const VentLeaf& leaf = (side == VS_TOP) ? s_top : s_bottom;
+    s_autoStepPending = (leaf.dir != want);
 }
 
 // Проверить — закончилась ли ступень (мотор отработал нужное время)
@@ -552,6 +559,10 @@ static void processAuto(uint64_t nowMs, float temp) {
       case VAS_OPEN_BOTTOM_STEP:
       case VAS_CLOSE_TOP_STEP:
       case VAS_CLOSE_BOTTOM_STEP: {
+            if (s_autoStepPending) {            // пуск был отложен — повторяем
+                startStep(s_autoActiveSide, s_autoStepDir, nowMs);
+                return;
+            }
             if (!stepCompleted(nowMs)) return;
             // Ступень завершена — стоп, переходим в паузу
             VentSide activeSide = s_autoActiveSide;
