@@ -45,9 +45,14 @@ static char                  s_testSsid[33];
 static char                  s_testPass[64];
 static uint64_t              s_testStartMs = 0;
 static std::atomic<bool>     s_testGotIp{false};
+// Было событие STA_CONNECTED: точка приняла нас, рукопожатие WPA пройдено,
+// то есть пароль верный. Если адреса после этого нет — дело в DHCP сети
+// (выдача только известным MAC и т.п.), а не в пароле.
+static std::atomic<bool>     s_testAssoc{false};
 static std::atomic<uint8_t>  s_testDiscCount{0};
 static std::atomic<uint16_t> s_testLastReason{0};
 static char                  s_testResult[24] = "";   // причина отказа для /status
+static uint16_t              s_testCode = 0;          // код причины, замороженный в момент отказа
 static char                  s_testIp[16]     = "";   // адрес в домашней сети при успехе
 #define PROV_TEST_TIMEOUT_MS   20000ULL
 #define PROV_TEST_MAX_DISC     3       // столько отказов подряд — пароль неверный
@@ -92,27 +97,104 @@ button:disabled{background:#a0aec0;cursor:wait}
 </head>
 <body>
 <div class="card">
-  <h1>Wi-Fi Setup</h1>
-  <div class="sub">Smart Greenhouse — initial network setup</div>
+  <h1 data-t="h1">Wi-Fi Setup</h1>
+  <div class="sub" data-t="sub">Smart Greenhouse — initial network setup</div>
 
-  <label for="ssid">Wi-Fi Network</label>
+  <label for="ssid" data-t="lbl_net">Wi-Fi Network</label>
   <select id="ssid"><option value="">— loading... —</option></select>
-  <button type="button" class="scanbtn" onclick="scan()">Refresh list</button>
+  <button type="button" class="scanbtn" onclick="scan()" data-t="refresh">Refresh list</button>
 
-  <label for="pass">Password</label>
+  <label for="pass" data-t="lbl_pass">Password</label>
   <input type="password" id="pass" autocomplete="off" placeholder="Wi-Fi password">
 
   <label style="margin-top:16px;display:flex;align-items:center;gap:8px">
     <input type="checkbox" id="show" onchange="togglePass()" style="width:auto">
-    <span style="font-size:13px;color:#4a5568">Show password</span>
+    <span style="font-size:13px;color:#4a5568" data-t="show">Show password</span>
   </label>
 
-  <button type="button" id="submit" onclick="save()">Connect</button>
+  <button type="button" id="submit" onclick="save()" data-t="connect">Connect</button>
 
   <div id="msg" class="msg"></div>
 </div>
 
 <script>
+// Язык — по языку браузера: русский для ru*, иначе английский. Выбора на
+// странице нет намеренно: портал открывается один раз, и телефон уже знает,
+// на каком языке говорит его владелец.
+var T={
+en:{title:'Greenhouse Setup',h1:'Wi-Fi Setup',sub:'Smart Greenhouse — initial network setup',
+  lbl_net:'Wi-Fi Network',refresh:'Refresh list',lbl_pass:'Password',ph_pass:'Wi-Fi password',
+  show:'Show password',connect:'Connect',loading:'— loading... —',scanning:'— scanning... —',
+  select:'— select network —',none:'— no networks found —',scan_err:'— scan error —',
+  need_net:'Select a Wi-Fi network',
+  pass_len:'A Wi-Fi password is 8 to 63 characters (leave it empty for an open network)',
+  checking_btn:'Checking...',
+  checking:'Checking the password, up to 20 seconds. Your phone may briefly lose this network — that is normal.',
+  err:'Error: ',no_conn:'No connection to device',
+  ok:'Connected! Settings saved, the device is rebooting. Connect your phone to your home Wi-Fi',
+  ok_ip:' and open http://{ip}',
+  wrong_password:'Wrong password. Nothing was saved — check the password and try again.',
+  not_found:'Network not found. Move the device closer to the router or pick another network.',
+  no_ip:'The password was accepted, but the network did not give the device an IP address (DHCP). '+
+    'The router probably hands out addresses only to known devices — reserve an address for the '+
+    'controller\'s MAC in its DHCP settings. Nothing was saved.',
+  dropped:'The password was accepted, but the network then dropped the connection{code}. '+
+    'Check the router\'s limits on clients or MAC addresses. Nothing was saved.',
+  timeout:'The network did not respond within 20 seconds. Move the device closer to the router and try again. '+
+    'Nothing was saved.',
+  save_failed:'Connected, but the settings could not be written to memory. Try again.',
+  failed:'Could not connect{code}. The network refused the connection for a reason other than the password '+
+    '(for example WPA3-only or WPA2-Enterprise). Nothing was saved.',
+  code:' (code {n})',
+  lost:'Lost contact with the device. If the Greenhouse network is gone, the device has connected and rebooted. '+
+    'If it is still there, reconnect to it and open http://192.168.4.1 again.'},
+ru:{title:'Настройка теплицы',h1:'Настройка Wi-Fi',sub:'Умная теплица — первичная настройка сети',
+  lbl_net:'Сеть Wi-Fi',refresh:'Обновить список',lbl_pass:'Пароль',ph_pass:'Пароль Wi-Fi',
+  show:'Показать пароль',connect:'Подключить',loading:'— загрузка… —',scanning:'— поиск сетей… —',
+  select:'— выберите сеть —',none:'— сети не найдены —',scan_err:'— ошибка поиска —',
+  need_net:'Выберите сеть Wi-Fi',
+  pass_len:'Пароль Wi-Fi — от 8 до 63 символов (для открытой сети оставьте поле пустым)',
+  checking_btn:'Проверка…',
+  checking:'Проверяю пароль, до 20 секунд. Телефон может ненадолго потерять эту сеть — это нормально.',
+  err:'Ошибка: ',no_conn:'Нет связи с устройством',
+  ok:'Подключено! Настройки сохранены, устройство перезагружается. Подключите телефон к домашней сети Wi-Fi',
+  ok_ip:' и откройте http://{ip}',
+  wrong_password:'Неверный пароль. Ничего не сохранено — проверьте пароль и попробуйте снова.',
+  not_found:'Сеть не найдена. Поднесите устройство ближе к роутеру или выберите другую сеть.',
+  no_ip:'Пароль принят, но сеть не выдала устройству IP-адрес (DHCP). '+
+    'Скорее всего, роутер раздаёт адреса только известным устройствам — закрепите адрес '+
+    'за MAC контроллера в настройках DHCP. Ничего не сохранено.',
+  dropped:'Пароль принят, но сеть затем разорвала подключение{code}. '+
+    'Проверьте ограничения роутера по числу клиентов или по MAC-адресам. Ничего не сохранено.',
+  timeout:'Сеть не ответила за 20 секунд. Поднесите устройство ближе к роутеру и попробуйте снова. '+
+    'Ничего не сохранено.',
+  save_failed:'Подключено, но настройки не удалось записать в память. Попробуйте ещё раз.',
+  failed:'Не удалось подключиться{code}. Сеть отклонила подключение по причине, не связанной с паролем '+
+    '(например, только WPA3 или WPA2-Enterprise). Ничего не сохранено.',
+  code:' (код {n})',
+  lost:'Связь с устройством потеряна. Если сети Greenhouse больше нет — устройство подключилось и перезагрузилось. '+
+    'Если она есть — подключитесь к ней снова и откройте http://192.168.4.1.'}
+};
+var L=/^ru\b/i.test(navigator.language||'')?'ru':'en';
+function t(k,a){
+  var v=T[L][k]||T.en[k]||k;
+  if(a)for(var x in a)v=v.split('{'+x+'}').join(a[x]);
+  return v;
+}
+function applyLang(){
+  document.documentElement.lang=L;
+  document.title=t('title');
+  var els=document.querySelectorAll('[data-t]');
+  for(var i=0;i<els.length;i++)els[i].textContent=t(els[i].getAttribute('data-t'));
+  document.getElementById('pass').placeholder=t('ph_pass');
+}
+function opt1(sel,k){
+  sel.textContent='';
+  var o=document.createElement('option');
+  o.value='';o.textContent=t(k);
+  sel.appendChild(o);
+}
+
 function togglePass(){
   var p=document.getElementById('pass');
   p.type=document.getElementById('show').checked?'text':'password';
@@ -120,9 +202,9 @@ function togglePass(){
 
 function scan(){
   var sel=document.getElementById('ssid');
-  sel.innerHTML='<option value="">— scanning... —</option>';
+  opt1(sel,'scanning');
   fetch('/scan').then(function(r){return r.json();}).then(function(d){
-    sel.innerHTML='<option value="">— select network —</option>';
+    opt1(sel,d.networks.length?'select':'none');
     for(var i=0;i<d.networks.length;i++){
       var n=d.networks[i];
       var opt=document.createElement('option');
@@ -130,64 +212,58 @@ function scan(){
       opt.textContent=n.ssid+' ('+n.rssi+' dBm'+(n.enc?', 🔒':'')+')';
       sel.appendChild(opt);
     }
-    if(d.networks.length===0){
-      sel.innerHTML='<option value="">— no networks found —</option>';
-    }
   }).catch(function(){
-    sel.innerHTML='<option value="">— scan error —</option>';
+    opt1(sel,'scan_err');
   });
 }
 
 function save(){
   var ssid=document.getElementById('ssid').value;
   var pass=document.getElementById('pass').value;
-  var msg=document.getElementById('msg');
   var btn=document.getElementById('submit');
-  if(!ssid){ showMsg('err','Select a Wi-Fi network'); return; }
+  if(!ssid){ showMsg('err',t('need_net')); return; }
+  // Длина — в байтах UTF-8, как её считает контроллер (и стандарт WPA2).
+  var pb=unescape(encodeURIComponent(pass)).length;
+  if(pb&&(pb<8||pb>63)){ showMsg('err',t('pass_len')); return; }
   btn.disabled=true;
-  btn.textContent='Checking...';
-  showMsg('ok','Checking the password, up to 20 seconds. Your phone may briefly lose this network — that is normal.');
+  btn.textContent=t('checking_btn');
+  showMsg('ok',t('checking'));
   var fd=new FormData();
   fd.append('ssid',ssid);
   fd.append('pass',pass);
   fetch('/save',{method:'POST',body:fd}).then(function(r){
     if(r.ok){ poll(Date.now()); }
-    else{ r.text().then(function(t){ fail('Error: '+t); }); }
-  }).catch(function(){ fail('No connection to device'); });
+    else{ r.text().then(function(x){ fail(t('err')+x); }); }
+  }).catch(function(){ fail(t('no_conn')); });
 }
 
 // Опрос результата пробного подключения. Пока контроллер подключается к
 // домашней сети, его точка доступа может переехать на её канал и телефон
 // ненадолго отвалится — ошибки запросов в это время ожидаемы.
+var FAIL_KEYS={wrong_password:1,not_found:1,no_ip:1,timeout:1,save_failed:1,dropped:1};
 function poll(t0){
   fetch('/status',{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){
     if(d.state==='ok'){
-      showMsg('ok','Connected! Settings saved, the device is rebooting. Connect your phone to your home Wi-Fi'+
-        (d.ip?' and open http://'+d.ip:'')+'.');
+      showMsg('ok',t('ok')+(d.ip?t('ok_ip',{ip:d.ip}):'')+'.');
       return;
     }
     if(d.state==='fail'){
-      fail(d.reason==='wrong_password'?'Wrong password. Nothing was saved — check the password and try again.':
-           d.reason==='not_found'?'Network not found. Move the device closer to the router or pick another network.':
-           'Could not connect. Nothing was saved — check the password and try again.');
+      var cd={code:d.code?t('code',{n:d.code}):''};
+      fail(FAIL_KEYS[d.reason]?t(d.reason,cd):t('failed',cd));
       return;
     }
     next(t0);
   }).catch(function(){ next(t0); });
 }
 function next(t0){
-  if(Date.now()-t0>60000){
-    fail('Lost contact with the device. If the Greenhouse network is gone, the device has connected and rebooted. '+
-         'If it is still there, reconnect to it and open http://192.168.4.1 again.');
-    return;
-  }
+  if(Date.now()-t0>60000){ fail(t('lost')); return; }
   setTimeout(function(){ poll(t0); },1000);
 }
 function fail(text){
   var btn=document.getElementById('submit');
   showMsg('err',text);
   btn.disabled=false;
-  btn.textContent='Connect';
+  btn.textContent=t('connect');
 }
 
 function showMsg(type,text){
@@ -196,7 +272,7 @@ function showMsg(type,text){
   m.textContent=text;
 }
 
-window.onload=scan;
+window.onload=function(){ applyLang(); scan(); };
 </script>
 </body>
 </html>)HTML";
@@ -317,11 +393,15 @@ static void handleSave(AsyncWebServerRequest* req) {
 // Состояние пробного подключения: {"state":"testing|ok|fail|idle", ...}
 static void handleStatus(AsyncWebServerRequest* req) {
     const uint8_t st = s_test.load();
-    char buf[96];
+    char buf[128];
     const char* name = (st == PT_OK) ? "ok" : (st == PT_FAIL) ? "fail"
                      : (st == PT_IDLE) ? "idle" : "testing";
-    snprintf(buf, sizeof(buf), "{\"state\":\"%s\",\"reason\":\"%s\",\"ip\":\"%s\"}",
-        name, st == PT_FAIL ? s_testResult : "", st == PT_OK ? s_testIp : "");
+    // code — причина отказа от модуля Wi-Fi (WIFI_REASON_*): по ней разбирают
+    // жалобу «не подключается», не подключая USB.
+    snprintf(buf, sizeof(buf), "{\"state\":\"%s\",\"reason\":\"%s\",\"code\":%u,\"ip\":\"%s\"}",
+        name, st == PT_FAIL ? s_testResult : "",
+        st == PT_FAIL ? (unsigned)s_testCode : 0u,
+        st == PT_OK ? s_testIp : "");
     AsyncWebServerResponse* resp = req->beginResponse(200, "application/json", buf);
     resp->addHeader("Cache-Control", "no-store");
     req->send(resp);
@@ -333,8 +413,15 @@ static void onProvWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     if (s_test.load() != PT_RUNNING) return;
     if (event == ARDUINO_EVENT_WIFI_STA_GOT_IP) {
         s_testGotIp.store(true);
+    } else if (event == ARDUINO_EVENT_WIFI_STA_CONNECTED) {
+        s_testAssoc.store(true);
     } else if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
-        s_testLastReason.store(info.wifi_sta_disconnected.reason);
+        // ASSOC_LEAVE — отключились мы сами: ядро Arduino при автопереподключении
+        // зовёт WiFi.disconnect(), портал — по итогу проверки. Это не отказ
+        // сети; посчитанный как отказ, он подменял бы настоящую причину.
+        const uint16_t r = info.wifi_sta_disconnected.reason;
+        if (r == WIFI_REASON_ASSOC_LEAVE) return;
+        s_testLastReason.store(r);
         s_testDiscCount.fetch_add(1);
     }
 }
@@ -478,6 +565,7 @@ void WifiProv::loop() {
     const uint64_t nowMs = (uint64_t)esp_timer_get_time() / 1000ULL;
     if (s_test.load() == PT_REQUESTED) {
         s_testGotIp.store(false);
+        s_testAssoc.store(false);
         s_testDiscCount.store(0);
         s_testLastReason.store(0);
         s_testResult[0] = '\0';
@@ -515,12 +603,19 @@ void WifiProv::loop() {
         } else if (s_testDiscCount.load() >= PROV_TEST_MAX_DISC
                    || nowMs - s_testStartMs >= PROV_TEST_TIMEOUT_MS) {
             const uint16_t reason = s_testLastReason.load();
-            strlcpy(s_testResult, reason ? testFailReason(reason) : "timeout",
-                    sizeof(s_testResult));
+            const char* res = reason ? testFailReason(reason) : "timeout";
+            // Точка нас уже принимала — пароль верный, что бы ни пришло потом:
+            // таймаут при этом значит, что сеть не выдала адрес (DHCP).
+            if (s_testAssoc.load()) {
+                res = (strcmp(res, "timeout") == 0) ? "no_ip" : "dropped";
+            }
+            strlcpy(s_testResult, res, sizeof(s_testResult));
+            s_testCode = reason;
             // disconnect(false): STA останавливаем, точку доступа — нет.
             WiFi.disconnect(false);
-            Serial.printf("[PROV] Test FAILED: %s (reason %u, %u disconnects)\n",
-                s_testResult, (unsigned)reason, (unsigned)s_testDiscCount.load());
+            Serial.printf("[PROV] Test FAILED: %s (reason %u, %u disconnects, %s)\n",
+                s_testResult, (unsigned)reason, (unsigned)s_testDiscCount.load(),
+                s_testAssoc.load() ? "was associated" : "never associated");
             s_test.store(PT_FAIL);
         }
     }

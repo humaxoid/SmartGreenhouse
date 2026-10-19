@@ -315,8 +315,9 @@ looks like this:
 
 ### 5.2 Find your network and connect to it
 
-The portal is two fields and a button. It is in English regardless of the web
-panel language — the page is built into the firmware and is not translated.
+The portal is two fields and a button. Its language follows the phone's
+browser: Russian on a Russian-language phone, English otherwise. The names
+below are the English ones.
 
 | Portal element | Purpose |
 |---|---|
@@ -342,6 +343,13 @@ panel language — the page is built into the firmware and is not translated.
    saved, and you can correct it and try again. While the check runs, your
    phone may briefly drop off `Greenhouse-XXXXXX`: the radio moves to the home
    network's channel, which is normal.
+
+   If the page says the password was accepted but no IP address was given,
+   the password is right: the router hands out addresses only to known
+   devices. Reserve an address for the controller's MAC in its DHCP settings —
+   the last three bytes of the MAC are in the access point name
+   `Greenhouse-XXXXXX`. When the network refuses or drops the connection for
+   another reason, the page shows the Wi-Fi reason code.
 
 > [!NOTE]
 > Limits: the network name may be up to 32 characters, the password up to 63.
